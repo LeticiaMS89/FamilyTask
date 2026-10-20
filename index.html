@@ -1,0 +1,2341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FamilyTask Manager</title>
+    
+    <!-- PWA Configs -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#8B5CF6">
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase V8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="src/services/task-service.js"></script>
+    <script src="src/services/task-query-service.js"></script>
+    <script src="src/services/approval-service.js"></script>
+    <script src="src/services/wallet-service.js"></script>
+    <script src="src/services/base-service.js"></script>
+    <script src="src/services/finance-service.js"></script>
+    <script src="src/services/gamification-service.js?v=12"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bgMain: '#09090B',
+                        bgCard: '#15111B',
+                        mainRed: '#E11D48',
+                        darkRed: '#9F1239',
+                        blueGrey: '#6D28D9',
+                        success: '#A855F7',
+                        yellow: { 300: '#C4B5FD', 400: '#A78BFA', 500: '#8B5CF6', 600: '#7C3AED' },
+                        pink: { 300: '#F0ABFC', 400: '#E879F9', 500: '#D946EF', 600: '#C026D3' },
+                        blue: { 300: '#C4B5FD', 400: '#A78BFA', 500: '#8B5CF6', 600: '#7C3AED' },
+                        green: { 300: '#C4B5FD', 400: '#A78BFA', 500: '#8B5CF6', 600: '#7C3AED' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script>
+        try {
+            if (localStorage.getItem('familytask-theme') === 'light') document.documentElement.classList.add('light-mode');
+        } catch (error) {}
+    </script>
+    <style>
+        body { background-color: #09090B; color: #FFFFFF; font-family: 'Segoe UI', sans-serif; -webkit-tap-highlight-color: transparent; }
+        html.light-mode body { background-color: #edf2f4 !important; color: #1d2a30; }
+        html.light-mode .bg-bgMain { background-color: #ffffff !important; }
+        html.light-mode .bg-bgCard { background-color: #f5f8f9 !important; }
+        html.light-mode .text-white { color: #1d2a30 !important; }
+        html.light-mode .text-gray-300 { color: #394a52 !important; }
+        html.light-mode .text-gray-400 { color: #52646d !important; }
+        html.light-mode .text-gray-500 { color: #647780 !important; }
+        html.light-mode [class~="border-blueGrey/20"],
+        html.light-mode [class~="border-blueGrey/30"],
+        html.light-mode [class~="border-blueGrey/40"],
+        html.light-mode [class~="border-blueGrey/50"],
+        html.light-mode [class~="border-blueGrey"] { border-color: #c6d2d7 !important; }
+        html.light-mode ::-webkit-scrollbar-track { background: #edf2f4; }
+        html.light-mode ::-webkit-scrollbar-thumb { background: #9aaeb6; }
+        html.light-mode .task-badge-item { background: #e8eef0; }
+        html.light-mode .task-badge-progress { background: rgba(255,255,255,.96); color: #6d5000; }
+        html.light-mode .task-badge-earned .task-badge-progress { color: #725000; }
+        html.light-mode .task-badge-number { background: rgba(255,255,255,.94); color: #1d2a30; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #09090B; }
+        ::-webkit-scrollbar-thumb { background: #6D28D9; border-radius: 4px; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .progress-bar { transition: width 0.4s ease; }
+        #auth-screen { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; background: #09090B; }
+        #auth-screen.hidden { display: none !important; }
+        body.auth-locked > :not(#auth-screen) { display: none !important; }
+
+        .rank-badge-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 150px;
+            filter: drop-shadow(0 18px 28px rgba(0,0,0,.46));
+            animation: badgeFloat 4s ease-in-out infinite;
+        }
+        @keyframes badgeFloat {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-4px) scale(1.015); }
+        }
+        @keyframes badgePulse {
+            0%, 100% { box-shadow: inset 0 2px 12px rgba(255,255,255,.28), inset 0 -14px 22px rgba(0,0,0,.46), 0 0 18px var(--badge-glow, rgba(255,190,60,.48)); }
+            50% { box-shadow: inset 0 2px 12px rgba(255,255,255,.35), inset 0 -14px 22px rgba(0,0,0,.46), 0 0 36px var(--badge-glow, rgba(255,190,60,.68)); }
+        }
+        @keyframes shimmerSweep {
+            0% { transform: translateX(-120%) rotate(8deg); opacity: 0; }
+            15% { opacity: 1; }
+            45% { opacity: 1; }
+            100% { transform: translateX(120%) rotate(8deg); opacity: 0; }
+        }
+        @keyframes sparkleTwinkle {
+            0%, 100% { transform: scale(0.8); opacity: 0.2; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+        .rank-badge {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid rgba(255,255,255,.75);
+            clip-path: polygon(50% 0%, 82% 10%, 100% 40%, 94% 82%, 50% 100%, 6% 82%, 0% 40%, 18% 10%);
+            box-shadow: inset 0 2px 12px rgba(255,255,255,.28), inset 0 -14px 22px rgba(0,0,0,.46), 0 0 26px var(--badge-glow, rgba(255,190,60,.48));
+            background:
+                linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.04) 18%, rgba(0,0,0,.1) 18%, rgba(0,0,0,.2) 100%),
+                linear-gradient(145deg, var(--badge-primary, #d4af37), var(--badge-secondary, #8c5d00) 32%, rgba(18,20,26,.88) 34%, rgba(18,20,26,.97) 100%);
+            overflow: visible;
+            animation: badgePulse 3.2s ease-in-out infinite;
+        }
+        .rank-badge::before,
+        .rank-badge::after {
+            content: "";
+            position: absolute;
+            inset: 10px 12px 12px 12px;
+            clip-path: polygon(50% 0%, 82% 10%, 100% 40%, 94% 82%, 50% 100%, 6% 82%, 0% 40%, 18% 10%);
+            border: 2px solid rgba(236,244,255,.38);
+            box-shadow: inset 0 0 18px rgba(255,255,255,.08), inset 0 0 24px rgba(0,0,0,.24);
+        }
+        .rank-badge::before {
+            background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,0) 45%, rgba(255,255,255,.12) 80%, rgba(0,0,0,.14) 100%);
+        }
+        .rank-badge::after {
+            inset: 18px 20px 20px 20px;
+            background: radial-gradient(circle at 50% 25%, rgba(255,255,255,.46), rgba(255,255,255,.08) 25%, rgba(0,0,0,.26) 67%, rgba(0,0,0,.62) 100%);
+            border-color: rgba(255,255,255,.18);
+            box-shadow: 0 0 22px rgba(255,255,255,.08);
+        }
+        .rank-badge-wrap::before {
+            content: "";
+            position: absolute;
+            inset: -18px auto auto 50%;
+            width: 100px;
+            height: 100px;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(255,255,255,.28), transparent 65%);
+            filter: blur(18px);
+            pointer-events: none;
+        }
+        .rank-badge-wrap::after {
+            content: "";
+            position: absolute;
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--badge-glow, rgba(255,190,60,.5)) 0%, rgba(255,255,255,0) 64%);
+            filter: blur(12px);
+            opacity: 0.7;
+            z-index: -1;
+            animation: badgeFloat 4s ease-in-out infinite reverse;
+        }
+        .level-up-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(9, 12, 18, 0.68);
+            backdrop-filter: blur(10px);
+            z-index: 70;
+            overflow: hidden;
+        }
+        .level-up-overlay::before {
+            content: "";
+            position: absolute;
+            inset: 6% 10%;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(255, 210, 92, 0.3), rgba(255, 210, 92, 0.08) 22%, rgba(255, 255, 255, 0) 60%);
+            filter: blur(18px);
+            animation: auraPulse 2.3s ease-in-out infinite alternate;
+        }
+        .level-up-overlay.active {
+            display: flex;
+            animation: overlayFadeIn 0.28s ease-out;
+        }
+        @keyframes overlayFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        @keyframes auraPulse {
+            0% { transform: scale(0.88); opacity: 0.55; }
+            100% { transform: scale(1.12); opacity: 1; }
+        }
+        @keyframes levelUpPop {
+            0% { transform: scale(0.6) rotate(-8deg); opacity: 0; }
+            18% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+            35% { transform: scale(1) rotate(0deg); }
+            72% { transform: scale(1.03); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes orbitBurst {
+            0% { transform: translate3d(0, 0, 0) scale(0.5); opacity: 0; }
+            15% { opacity: 1; }
+            100% { transform: translate3d(var(--dx), var(--dy), 0) scale(1); opacity: 0; }
+        }
+        .level-up-card {
+            position: relative;
+            width: min(92vw, 420px);
+            padding: 1.2rem 1.25rem 1rem;
+            border-radius: 24px;
+            background: linear-gradient(145deg, rgba(17, 22, 29, 0.98), rgba(28, 33, 42, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 28px 60px rgba(0,0,0,0.5), 0 0 30px rgba(255, 210, 92, 0.26);
+            overflow: hidden;
+            animation: levelUpPop 0.7s cubic-bezier(.2,.9,.2,1);
+        }
+        .level-up-card::before {
+            content: "";
+            position: absolute;
+            inset: -20% auto auto -10%;
+            width: 70%;
+            height: 120%;
+            background: linear-gradient(115deg, rgba(255,255,255,0), rgba(255,255,255,0.18), rgba(255,255,255,0));
+            transform: translateX(-30%) rotate(18deg);
+            pointer-events: none;
+        }
+        .level-up-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .level-up-particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.7) 20%, rgba(255,255,255,0) 80%);
+            box-shadow: 0 0 16px rgba(255,255,255,0.7);
+            animation: orbitBurst 1.2s ease-out forwards;
+            left: 50%;
+            top: 50%;
+            --dx: 0px;
+            --dy: 0px;
+        }
+        .level-up-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(255, 210, 92, 0.12);
+            border: 1px solid rgba(255, 210, 92, 0.3);
+            color: #ffd260;
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+        .level-up-badge {
+            margin: 0.9rem auto 0.5rem;
+            width: 118px;
+            height: 118px;
+            display: grid;
+            place-items: center;
+            border-radius: 24px;
+            background: linear-gradient(160deg, #f0d78a, #c88716 30%, #352111 100%);
+            border: 2px solid rgba(255,255,255,0.7);
+            box-shadow: inset 0 8px 18px rgba(255,255,255,0.2), 0 12px 32px rgba(255, 180, 40, 0.32);
+            color: #fff;
+            font-size: 2.2rem;
+            font-weight: 900;
+        }
+        .level-up-member {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #f4f7fa;
+            text-align: center;
+        }
+        .level-up-rank {
+            margin-top: 0.3rem;
+            font-size: 1.8rem;
+            font-weight: 900;
+            text-align: center;
+            color: #ffd260;
+            text-shadow: 0 0 18px rgba(255, 210, 92, 0.38);
+        }
+        .level-up-sub {
+            margin-top: 0.3rem;
+            font-size: 0.72rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #dfe9f5;
+            text-align: center;
+            opacity: 0.8;
+        }
+        .level-up-close {
+            margin-top: 0.9rem;
+            width: 100%;
+            border: 0;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #ffd260, #ffb347);
+            color: #1a1a1a;
+            font-weight: 800;
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+        }
+        .level-up-overlay.hidden {
+            display: none;
+        }
+        .level-up-overlay .level-up-card {
+            position: relative;
+        }
+        .rank-badge-sheen {
+            position: absolute;
+            inset: 8px -8px 8px -8px;
+            background: linear-gradient(120deg, rgba(255,255,255,0) 28%, rgba(255,255,255,.8) 48%, rgba(255,255,255,0) 66%);
+            transform: translateX(-120%) rotate(8deg);
+            opacity: 0;
+            z-index: 5;
+            animation: shimmerSweep 3.5s linear infinite;
+        }
+        .rank-badge-sparkles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4;
+        }
+        .rank-badge-sparkles span {
+            position: absolute;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,.7) 18%, rgba(255,255,255,0) 68%);
+            box-shadow: 0 0 12px rgba(255,255,255,.7);
+            animation: sparkleTwinkle 2.4s ease-in-out infinite;
+        }
+        .rank-badge-sparkles span:nth-child(1) { top: 18px; left: 22px; animation-delay: .1s; }
+        .rank-badge-sparkles span:nth-child(2) { top: 12px; right: 28px; animation-delay: .5s; }
+        .rank-badge-sparkles span:nth-child(3) { top: 56%; left: 12px; animation-delay: .9s; }
+        .rank-badge-sparkles span:nth-child(4) { top: 52%; right: 16px; animation-delay: 1.4s; }
+        .rank-badge-sparkles span:nth-child(5) { bottom: 14px; left: 42%; animation-delay: 1.8s; }
+        .rank-badge-sparkles span:nth-child(6) { bottom: 18px; right: 24px; animation-delay: 2.2s; }
+        .rank-badge-crown {
+            position: absolute;
+            top: -17px;
+            left: 50%;
+            width: 82px;
+            height: 28px;
+            transform: translateX(-50%);
+            background: linear-gradient(180deg, #f5f7fa 0%, #afb8c4 24%, #77859a 58%, #1d2330 100%);
+            clip-path: polygon(0% 100%, 12% 42%, 28% 62%, 39% 20%, 52% 62%, 64% 20%, 76% 62%, 88% 42%, 100% 100%);
+            border: 2px solid rgba(255,255,255,.55);
+            box-shadow: 0 0 18px rgba(255,255,255,.22), 0 10px 20px rgba(0,0,0,.25);
+            z-index: 3;
+        }
+        .rank-badge-crown::before,
+        .rank-badge-crown::after {
+            content: "";
+            position: absolute;
+            inset: 10px 0 auto 0;
+            height: 8px;
+            background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.8) 18%, rgba(0,0,0,.1) 50%, rgba(255,255,255,.75) 82%, transparent 100%);
+        }
+        .rank-badge-crown::after {
+            top: 8px;
+            left: 12px;
+            right: 12px;
+            height: 4px;
+            background: rgba(255,255,255,.38);
+        }
+        .rank-badge-bolts {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .rank-badge-bolts span {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #fefefe, #7b8191 28%, #2d3643 70%);
+            box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 0 8px rgba(0,0,0,.35);
+        }
+        .rank-badge-bolts span:nth-child(1) { top: 18px; left: 28px; }
+        .rank-badge-bolts span:nth-child(2) { top: 18px; right: 28px; }
+        .rank-badge-bolts span:nth-child(3) { bottom: 28px; left: 20px; }
+        .rank-badge-bolts span:nth-child(4) { bottom: 28px; right: 20px; }
+        .rank-badge-bolts span:nth-child(5) { top: 50%; left: 14px; transform: translateY(-50%); }
+        .rank-badge-bolts span:nth-child(6) { top: 50%; right: 14px; transform: translateY(-50%); }
+        .rank-badge-inner {
+            position: relative;
+            z-index: 2;
+            width: 74%;
+            height: 74%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #f3f5f8;
+            text-shadow: 0 2px 8px rgba(0,0,0,.7);
+            background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.26), rgba(255,255,255,.06) 22%, rgba(4,7,18,.34) 66%, rgba(0,0,0,.62) 100%);
+            clip-path: polygon(50% 0%, 82% 10%, 100% 40%, 94% 82%, 50% 100%, 6% 82%, 0% 40%, 18% 10%);
+            border: 2px solid rgba(255,255,255,.16);
+        }
+        .rank-badge-icon {
+            font-size: 2.6rem;
+            line-height: 1;
+            margin-top: 6px;
+            filter: drop-shadow(0 0 18px rgba(255,255,255,.34));
+        }
+        .rank-badge-species {
+            font-size: 8px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            opacity: .98;
+            font-weight: 800;
+            margin-bottom: 2px;
+            color: var(--badge-accent, #fff);
+        }
+        .rank-badge-level {
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1.1;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            color: #fffdfd;
+        }
+        .rank-badge-small {
+            transform: scale(.75);
+            transform-origin: center;
+        }
+        .rank-badge-locked {
+            filter: grayscale(.8) saturate(.45) brightness(.7);
+        }
+        .task-badge {
+            position: relative;
+            flex: 0 1 320px;
+            width: min(100%, 360px);
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .task-badge-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            color: #cbd5e1;
+            font-size: 9px;
+            font-weight: 700;
+        }
+        .task-badge-track {
+            display: flex;
+            gap: 7px;
+            overflow-x: auto;
+            padding: 22px 8px 28px;
+            overscroll-behavior-x: contain;
+            scrollbar-width: thin;
+        }
+        .task-badge-item {
+            position: relative;
+            flex: 0 0 88px;
+            width: 88px;
+            height: 116px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,.72);
+            border-radius: 10px;
+            background: #171b23;
+            box-shadow: 0 4px 10px rgba(0,0,0,.38);
+            transition: transform .18s ease, box-shadow .18s ease;
+            transform-origin: center;
+        }
+        .task-badge-item:hover,
+        .task-badge-item:focus-within {
+            z-index: 5;
+            transform: scale(1.35);
+            box-shadow: 0 10px 24px rgba(0,0,0,.72);
+        }
+        .task-badge-art {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        .task-badge-image {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+        .task-badge-trigger {
+            display: block;
+            width: 100%;
+            height: 88px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            cursor: zoom-in;
+        }
+        .task-badge-trigger:focus-visible {
+            outline: 2px solid #fbbf24;
+            outline-offset: -3px;
+        }
+        .task-badge-earned {
+            border-color: rgba(255,224,138,.9);
+            box-shadow: 0 0 10px rgba(255,193,62,.36);
+        }
+        .task-badge-locked .task-badge-image {
+            opacity: .22;
+            filter: grayscale(1) brightness(.8) blur(.5px);
+        }
+        .task-badge-locked:hover .task-badge-image,
+        .task-badge-locked:focus-within .task-badge-image {
+            opacity: 1;
+            filter: none;
+        }
+        .task-badge-locked::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(10,12,16,.28);
+            pointer-events: none;
+        }
+        .task-badge-locked:hover::after,
+        .task-badge-locked:focus-within::after {
+            background: transparent;
+        }
+        .task-badge-number {
+            position: absolute;
+            right: 3px;
+            top: 3px;
+            z-index: 2;
+            min-width: 15px;
+            padding: 1px 3px;
+            border-radius: 4px;
+            background: rgba(8,10,14,.86);
+            color: #fff;
+            font-size: 8px;
+            text-align: center;
+        }
+        .task-badge-progress {
+            display: block;
+            height: 24px;
+            padding: 5px 2px 3px;
+            background: rgba(8,10,14,.94);
+            color: #fbbf24;
+            font-size: 8px;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .task-badge-earned .task-badge-progress {
+            color: #fde68a;
+        }
+        .task-badge-small {
+            flex-basis: 260px;
+        }
+        .task-badge-small .task-badge-item {
+            flex-basis: 76px;
+            width: 76px;
+            height: 104px;
+        }
+        .task-badge-small .task-badge-image {
+            height: 100%;
+        }
+        .task-badge-small .task-badge-trigger {
+            height: 76px;
+        }
+        @media (max-width: 640px) {
+            .task-badge-item {
+                flex-basis: 76px;
+                width: 76px;
+                height: 104px;
+            }
+            .task-badge-image {
+                height: 100%;
+            }
+            .task-badge-trigger {
+                height: 76px;
+            }
+            .task-badge-small .task-badge-item {
+                flex-basis: 68px;
+                width: 68px;
+                height: 96px;
+            }
+            .task-badge-small .task-badge-image {
+                height: 100%;
+            }
+            .task-badge-small .task-badge-trigger {
+                height: 68px;
+            }
+        }
+        .badge-preview-image {
+            display: block;
+            max-width: 92vw;
+            max-height: 82vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            opacity: 1;
+            filter: none;
+        }
+        @media print {
+            body * { visibility: hidden !important; }
+            #base-report-section, #base-report-section * { visibility: visible !important; }
+            #base-report-section { position: absolute; inset: 0; width: 100%; margin: 0; padding: 0; border: 0; background: #fff !important; color: #111 !important; }
+            #base-report-section * { color: #111 !important; }
+            #base-report-section .report-controls { display: none !important; }
+            #base-report-list section { break-inside: avoid; border-color: #bbb !important; }
+        }
+    </style>
+</head>
+<body class="auth-locked flex flex-col md:flex-row h-screen overflow-hidden relative">
+    <section id="auth-screen" role="main" aria-labelledby="auth-title">
+        <div class="bg-bgCard border border-blueGrey/40 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div class="text-center mb-6">
+                <img src="logo.png" alt="" class="w-16 h-16 rounded-2xl mx-auto mb-3">
+                <h1 id="auth-title" class="text-2xl font-bold">FamilyTask</h1>
+                <p class="text-sm text-gray-400 mt-1">Entre para sincronizar os dados da família.</p>
+            </div>
+            <p id="auth-loading" class="text-sm text-gray-300 text-center">Verificando autenticação...</p>
+            <form id="auth-form" class="hidden space-y-3" onsubmit="window.appDB.signIn(event)">
+                <label class="block text-xs font-bold text-gray-300">E-mail
+                    <input id="auth-email" type="email" autocomplete="username" required class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-3 text-white">
+                </label>
+                <label class="block text-xs font-bold text-gray-300">Senha
+                    <input id="auth-password" type="password" autocomplete="current-password" required class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-3 text-white">
+                </label>
+                <p id="auth-error" class="hidden text-sm text-mainRed" role="alert"></p>
+                <button id="auth-submit" type="submit" class="w-full bg-success text-white rounded-lg p-3 font-bold">Entrar</button>
+                <button type="button" onclick="window.appDB.resetPassword()" class="w-full text-sm text-gray-400 hover:text-white">Esqueci minha senha</button>
+            </form>
+        </div>
+    </section>
+
+    <div id="level-up-overlay" class="level-up-overlay hidden" aria-live="polite" aria-modal="true">
+        <div class="level-up-particles" id="level-up-particles"></div>
+        <div class="level-up-card">
+            <div class="level-up-title"><i class="fas fa-crown"></i> Conquista</div>
+            <div class="level-up-badge">🏆</div>
+            <div id="level-up-member" class="level-up-member">Membro</div>
+            <div id="level-up-rank" class="level-up-rank">Ferro</div>
+            <div id="level-up-sub" class="level-up-sub">Nível alcançado</div>
+            <button class="level-up-close" onclick="document.getElementById('level-up-overlay').classList.add('hidden');">Continuar</button>
+        </div>
+    </div>
+
+    <!-- MENU -->
+    <nav class="bg-bgCard w-full md:w-64 md:h-full flex md:flex-col justify-between md:justify-start border-t md:border-t-0 md:border-r border-blueGrey/30 p-4 fixed bottom-0 md:relative z-40">
+        <div class="hidden md:flex flex-col items-center mb-6 pt-2">
+            <!-- LOGOTIPO INCORPORADO -->
+            <img src="logo.png" alt="FamilyTask Logo" class="w-20 h-20 rounded-2xl shadow-lg shadow-mainRed/20 object-cover border border-mainRed/30 mb-2">
+            <h1 class="text-xl font-bold tracking-wide">Family<span class="text-mainRed">Task</span></h1>
+            <p id="sync-status" class="text-[10px] mt-1 font-bold text-gray-400 bg-bgMain border border-blueGrey/50 rounded-full px-3 py-0.5"><i class="fas fa-wifi"></i> Conectando...</p>
+        </div>
+        <div class="flex md:flex-col w-full justify-around md:justify-start gap-2 md:gap-3">
+            <button onclick="window.appUI.switchTab('dashboard')" class="nav-btn bg-mainRed text-white flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl w-full transition-all" data-target="dashboard"><i class="fas fa-border-all text-lg"></i> <span class="text-[10px] md:text-sm font-semibold">Painel</span></button>
+            <button onclick="window.appUI.switchTab('integrantes')" class="nav-btn text-gray-400 hover:bg-blueGrey/20 flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl w-full transition-all" data-target="integrantes"><i class="fas fa-users text-lg"></i> <span class="text-[10px] md:text-sm font-semibold">Família</span></button>
+            <button onclick="window.appUI.switchTab('configuracoes')" class="nav-btn text-gray-400 hover:bg-blueGrey/20 flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl w-full transition-all" data-target="configuracoes"><i class="fas fa-cog text-lg"></i> <span class="text-[10px] md:text-sm font-semibold">Ajustes</span></button>
+        </div>
+    </nav>
+
+    <!-- CONTEÚDO -->
+    <main class="flex-1 p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto h-full">
+        <!-- DASHBOARD -->
+        <section id="dashboard" class="tab-content block max-w-7xl mx-auto">
+            <header class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <img src="logo.png" alt="Logo" class="w-10 h-10 rounded-xl md:hidden object-cover border border-mainRed/30">
+                    <div><h2 class="text-2xl md:text-3xl font-bold">Visão Geral</h2><p class="text-gray-400 text-sm" id="dash-date-display"></p></div>
+                </div>
+                <div class="flex gap-2 flex-wrap items-center">
+                    <div class="flex bg-bgMain border border-blueGrey/50 rounded-lg p-1">
+                        <button onclick="window.appUI.switchView('parent')" data-view-mode="parent" class="view-mode-btn px-3 py-2 rounded-md text-xs font-bold bg-mainRed text-white">Pais</button>
+                        <button onclick="window.appUI.switchView('child')" data-view-mode="child" class="view-mode-btn px-3 py-2 rounded-md text-xs font-bold text-gray-300">Filho</button>
+                    </div>
+                    <button type="button" onclick="window.appUI.enableNotifications()" class="bg-bgCard border border-blueGrey/50 text-gray-300 w-10 h-10 rounded-lg text-sm" title="Ativar notificações" aria-label="Ativar notificações"><i class="fas fa-bell"></i></button>
+                    <button onclick="window.appUI.openTaskModal()" class="bg-mainRed hover:bg-darkRed text-white px-3 py-2 rounded-lg text-sm font-bold shadow-lg shadow-mainRed/20"><i class="fas fa-plus"></i><span class="hidden md:inline ml-2">Tarefa</span></button>
+                    <button type="button" onclick="window.appUI.toggleTheme()" id="theme-toggle" class="bg-bgCard border border-blueGrey/50 text-gray-300 w-10 h-10 rounded-lg text-sm" aria-label="Alternar tema" title="Alternar tema claro/escuro"><i class="fas fa-sun" aria-hidden="true"></i></button>
+                </div>
+            </header>
+
+            <div id="parent-panel">
+            <div class="grid grid-cols-4 gap-3 mb-6" id="quick-stats"></div>
+
+            <section class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4 md:p-5 mb-6" aria-labelledby="task-explorer-title">
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
+                    <div>
+                        <h3 id="task-explorer-title" class="text-lg font-bold"><i class="fas fa-magnifying-glass-chart text-blue-300 mr-1"></i> Análise de tarefas</h3>
+                        <p class="text-xs text-gray-400 mt-1">Explore tarefas anteriores, atuais e futuras. Os filtros não alteram seus registros.</p>
+                    </div>
+                    <span id="task-explorer-count" class="text-xs text-gray-400 bg-bgMain border border-blueGrey/30 rounded-full px-3 py-1" aria-live="polite"></span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+                    <label class="text-xs text-gray-400">Período
+                        <select id="task-range-filter" onchange="window.appUI.updateTaskExplorerRange()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2.5 text-white">
+                            <option value="day">Dia selecionado</option>
+                            <option value="previous7">Últimos 7 dias</option>
+                            <option value="next7">Próximos 7 dias</option>
+                            <option value="month">Mês selecionado</option>
+                            <option value="year">Ano selecionado</option>
+                            <option value="custom">Intervalo personalizado</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-gray-400">Integrante
+                        <select id="task-member-filter" onchange="window.appUI.renderTaskExplorer()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2.5 text-white">
+                            <option value="all">Todos</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-gray-400">Categoria
+                        <select id="task-type-filter" onchange="window.appUI.renderTaskExplorer()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2.5 text-white">
+                            <option value="all">Todas</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-gray-400">Situação
+                        <select id="task-status-filter" onchange="window.appUI.renderTaskExplorer()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2.5 text-white">
+                            <option value="all">Todas</option>
+                            <option value="pending">Pendente</option>
+                            <option value="awaiting_approval">Aguardando aprovação</option>
+                            <option value="completed">Concluída / aprovada</option>
+                            <option value="failed">Não concluída</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-gray-400 sm:col-span-2">Buscar tarefa
+                        <input id="task-search-filter" type="search" maxlength="120" oninput="window.appUI.scheduleTaskExplorerRender()" placeholder="Digite parte do nome da tarefa" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2.5 text-white">
+                    </label>
+                    <label class="task-custom-date text-xs text-gray-400 hidden">De
+                        <input id="task-date-from" type="date" onchange="window.appUI.setTaskExplorerCustomRange()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white">
+                    </label>
+                    <label class="task-custom-date text-xs text-gray-400 hidden">Até
+                        <input id="task-date-to" type="date" onchange="window.appUI.setTaskExplorerCustomRange()" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white">
+                    </label>
+                    <div class="sm:col-span-2 xl:col-span-4 flex justify-end">
+                        <button type="button" onclick="window.appUI.resetTaskExplorerFilters()" class="px-3 py-2 rounded-lg border border-blueGrey/40 text-xs text-gray-300 hover:bg-blueGrey/20"><i class="fas fa-filter-circle-xmark mr-1"></i> Limpar filtros</button>
+                    </div>
+                </div>
+                <div id="task-explorer-list" class="mt-4 space-y-2" aria-live="polite"></div>
+            </section>
+
+            <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4 mb-6">
+                <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-bold">Meta de hidratação por integrante</h3></div>
+                <div id="water-members-summary" class="space-y-3"></div>
+            </div>
+
+            <!-- Calendário Mensal -->
+            <h3 class="text-lg font-bold mb-3 flex items-center gap-2"><i class="far fa-calendar-alt text-mainRed"></i> Calendário <span id="cal-month-name" class="text-sm font-normal text-gray-400 uppercase"></span></h3>
+            <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4 mb-6">
+                <div class="grid grid-cols-7 gap-1 text-center text-[10px] md:text-xs font-bold text-gray-500 mb-2"><div>DOM</div><div>SEG</div><div>TER</div><div>QUA</div><div>QUI</div><div>SEX</div><div>SÁB</div></div>
+                <div id="month-grid" class="grid grid-cols-7 gap-1 md:gap-2"></div>
+            </div>
+
+            <div id="daily-tasks-container" class="mb-8"></div>
+            <div class="bg-bgCard border border-yellow-300/30 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h3 class="font-bold"><i class="fas fa-star text-yellow-300 mr-1"></i> Adicionar tarefa bônus</h3>
+                    <p class="text-xs text-gray-400">Informe a tarefa e o valor manualmente. O bônus será somado ao total mensal quando concluída.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 w-full">
+                    <select id="bonus-task-member" aria-label="Integrante da tarefa bônus" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white text-sm"></select>
+                    <select id="bonus-task-template" aria-label="Usar tarefa bônus cadastrada" onchange="window.appUI.selectBonusTaskTemplate(this.value)" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white text-sm"><option value="">Digitar nova tarefa</option></select>
+                    <input id="bonus-task-title" type="text" maxlength="120" aria-label="Descrição da tarefa bônus" placeholder="Descrição da tarefa" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white text-sm">
+                    <input id="bonus-task-value" type="number" min="0.01" step="0.01" aria-label="Valor do bônus em reais" placeholder="Bônus (R$)" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white text-sm">
+                    <button type="button" onclick="window.appDB.addBonusTask()" class="px-4 py-2 bg-yellow-300 text-black rounded-lg text-sm font-bold"><i class="fas fa-plus mr-1"></i> Adicionar tarefa</button>
+                </div>
+            </div>
+
+            <!-- Gráfico -->
+            <div class="bg-bgCard border border-blueGrey/30 p-5 rounded-2xl mb-8">
+                <div class="flex justify-between mb-4 gap-2 flex-wrap">
+                    <h3 class="text-lg font-bold">Desempenho</h3>
+                    <div class="flex gap-2">
+                        <select id="chart-period" onchange="window.appUI.updateChart()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs outline-none"><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+                        <select id="chart-member-filter" onchange="window.appUI.updateChart()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs outline-none"><option value="all">Todos</option></select>
+                    </div>
+                </div>
+                <div class="relative h-64 w-full"><canvas id="taskChart"></canvas></div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                <div><h3 class="text-lg font-bold"><i class="fas fa-wallet text-success"></i> Extrato mensal</h3><p class="text-xs text-gray-400">Valor base do mês + bônus e descontos do mesmo mês</p></div>
+                <label class="text-xs text-gray-400" for="finance-month">Filtrar por mês
+                    <input id="finance-month" type="month" onchange="window.appUI.renderFinanceSummary()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs text-white ml-2">
+                </label>
+            </div>
+            <div id="finance-summary" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"></div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                    <div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold"><i class="fas fa-clipboard-check text-yellow-300"></i> Aprovações pendentes</h3><span id="approval-count" class="text-xs text-gray-400"></span></div>
+                    <div id="approval-list" class="space-y-3"></div>
+                </div>
+                <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                    <div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold"><i class="fas fa-piggy-bank text-pink-300"></i> Carteiras e metas</h3><button onclick="window.appUI.addGoal()" class="text-xs bg-bgMain border border-blueGrey px-3 py-1.5 rounded-lg"><i class="fas fa-bullseye"></i> Meta</button></div>
+                    <div id="wallets-list" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4 mb-8">
+                <div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold"><i class="fas fa-store text-yellow-300"></i> Loja de recompensas</h3><button onclick="window.appUI.addReward()" class="text-xs bg-bgMain border border-blueGrey px-3 py-1.5 rounded-lg"><i class="fas fa-plus"></i> Prêmio</button></div>
+                <div id="rewards-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+
+            <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4 mb-8">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                    <div><h3 class="text-lg font-bold"><i class="fas fa-clock-rotate-left text-mainRed"></i> Histórico</h3><p class="text-xs text-gray-400">Consumo, tarefas, ganhos, perdas e alterações da família</p></div>
+                    <div class="flex flex-wrap gap-2">
+                        <select id="history-period" onchange="window.appUI.renderHistory()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs"><option value="day">Diário</option><option value="week" selected>Semanal</option><option value="month">Mensal</option><option value="year">Anual</option></select>
+                        <select id="history-filter" onchange="window.appUI.renderHistory()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs"><option value="all">Tudo</option><option value="water">Hidratação</option><option value="task">Tarefas</option><option value="finance">Ganhos e perdas</option><option value="member">Usuários</option></select>
+                        <select id="history-member" onchange="window.appUI.renderHistory()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs"><option value="all">Todos</option></select>
+                    </div>
+                </div>
+                <div id="history-list" class="space-y-2"></div>
+                <div id="base-report-section" class="mt-6 border-t border-blueGrey/30 pt-4">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                        <h3 class="text-lg font-bold"><i class="fas fa-file-invoice-dollar text-success"></i> Extrato mensal do valor base</h3>
+                        <div class="report-controls flex flex-wrap gap-2">
+                            <label class="sr-only" for="base-report-month">Mês do extrato</label>
+                            <input id="base-report-month" type="month" onchange="window.appUI.renderBaseReport()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs text-white">
+                            <label class="sr-only" for="base-report-member">Integrante do extrato</label>
+                            <select id="base-report-member" onchange="window.appUI.renderBaseReport()" class="bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-xs"><option value="all">Todos os integrantes</option></select>
+                            <button type="button" onclick="window.appUI.printBaseReport()" class="bg-bgMain border border-blueGrey/50 rounded-lg px-3 py-2 text-xs" title="Imprimir extrato" aria-label="Imprimir extrato"><i class="fas fa-print"></i></button>
+                        </div>
+                    </div>
+                    <div id="base-report-list" class="divide-y divide-blueGrey/30"></div>
+                </div>
+            </div>
+            </div>
+
+            <div id="child-panel" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                        <h3 class="text-lg font-bold mb-3"><i class="fas fa-piggy-bank text-pink-300"></i> Meu cofrinho</h3>
+                        <div id="child-wallet-summary" class="space-y-3"></div>
+                    </div>
+                    <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                        <h3 class="text-lg font-bold mb-3"><i class="fas fa-bullseye text-yellow-300"></i> Minhas metas</h3>
+                        <div id="child-goals-summary" class="space-y-3"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                        <h3 class="text-lg font-bold mb-3"><i class="fas fa-store text-yellow-300"></i> Loja</h3>
+                        <div id="child-rewards-summary" class="space-y-3"></div>
+                    </div>
+                    <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                        <h3 class="text-lg font-bold mb-3"><i class="fas fa-list-check text-success"></i> Minhas tarefas</h3>
+                        <div id="child-tasks-summary" class="space-y-3"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTEGRANTES -->
+        <section id="integrantes" class="tab-content hidden max-w-5xl mx-auto">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Família</h2><button onclick="window.appUI.openMemberModal()" class="bg-blueGrey hover:bg-gray-500 px-3 py-2 rounded-lg text-sm font-bold"><i class="fas fa-user-plus"></i></button></div>
+            <div id="members-list" class="space-y-4"></div>
+            <div id="member-details" class="mt-6"></div>
+        </section>
+
+        <!-- CONFIGURAÇÕES -->
+        <section id="configuracoes" class="tab-content hidden max-w-4xl mx-auto">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Ajustes</h2></div>
+            <div class="bg-bgCard border border-blueGrey/30 p-5 rounded-2xl mb-6">
+                <div class="flex items-center justify-between gap-3">
+                    <div><h3 class="font-bold"><i class="fas fa-user-shield text-success mr-1"></i> Conta conectada</h3><p id="auth-account-email" class="text-sm text-gray-400 mt-1"></p></div>
+                    <button type="button" onclick="window.appDB.signOut()" class="px-3 py-2 text-mainRed border border-mainRed rounded-lg text-sm font-bold"><i class="fas fa-right-from-bracket mr-1"></i> Sair</button>
+                </div>
+            </div>
+            <div class="bg-bgCard border border-blueGrey/30 p-5 rounded-2xl mb-6">
+                <div class="flex justify-between mb-4"><h3 class="text-lg font-bold"><i class="fas fa-tags text-mainRed"></i> Categorias de Tarefa</h3><button onclick="window.appUI.openTaskTypeModal()" class="text-xs bg-bgMain border border-blueGrey px-3 py-1.5 rounded-lg">+ Nova</button></div>
+                <div id="task-types-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+            <div class="bg-bgCard border border-yellow-300/30 p-5 rounded-2xl mb-6">
+                <h3 class="text-lg font-bold mb-1"><i class="fas fa-star text-yellow-300"></i> Tarefas bônus cadastradas</h3>
+                <p class="text-xs text-gray-400 mb-4">Cadastre modelos para reutilizar no formulário de inclusão manual. Você também pode digitar uma tarefa nova diretamente no painel.</p>
+                <div id="bonus-task-options-list" class="space-y-3 mb-4"></div>
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_150px_auto] gap-2 items-end">
+                    <label class="text-xs text-gray-400">Nova tarefa bônus<input id="new-bonus-task-title" type="text" maxlength="120" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white" placeholder="Ex.: Ajudar a preparar o jantar"></label>
+                    <label class="text-xs text-gray-400">Valor do bônus (R$)<input id="new-bonus-task-value" type="number" min="0.01" step="0.01" class="mt-1 w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white" placeholder="5,00"></label>
+                    <button type="button" onclick="window.appDB.addBonusTaskOption()" class="px-4 py-2 bg-success text-white rounded-lg text-sm font-bold"><i class="fas fa-plus mr-1"></i> Adicionar</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAIS -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
+        <!-- Modal Integrante -->
+        <div id="modal-member" class="bg-bgCard p-6 rounded-2xl w-full max-w-md hidden border border-blueGrey/30 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 border-b border-blueGrey/30 pb-2">Integrante</h3>
+            <input type="hidden" id="mod-mem-id"><div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Nome</label><input type="text" id="mod-mem-name" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Idade</label><input type="number" id="mod-mem-age" onchange="window.appUI.updateWardrobeBonusDefault()" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Valor Base (R$)</label><input type="number" id="mod-mem-base" step="0.50" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <label class="flex items-center gap-2 mb-3 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="mod-mem-wardrobe-bonus" class="accent-mainRed"> Incluir bônus/desconto do guarda-roupa no total mensal</label>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Meta de hidratação (ml)</label><input type="number" id="mod-mem-goal" min="0" step="50" placeholder="Opcional, ex.: 2500" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Avatar (Semente)</label><input type="text" id="mod-mem-avatar" placeholder="Digite uma palavra..." class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Foto por URL</label><input type="url" id="mod-mem-photo" placeholder="https://.../foto.jpg" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-4"><label class="block text-xs font-bold text-gray-400 mb-1">Foto do dispositivo</label><input type="file" id="mod-mem-photo-file" accept="image/*" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="flex justify-between gap-2 mt-4"><button onclick="window.appDB.deleteWaterGoal()" class="px-3 py-2 text-mainRed border border-mainRed rounded-lg text-xs font-bold">Excluir meta</button><div class="flex gap-2"><button onclick="window.appUI.closeModals()" class="px-4 py-2 text-gray-400 text-sm">Cancelar</button><button onclick="window.appDB.saveMember()" class="px-5 py-2 bg-mainRed rounded-lg font-bold">Salvar</button></div></div>
+        </div>
+
+        <!-- Modal Tarefa -->
+        <div id="modal-task" class="bg-bgCard p-6 rounded-2xl w-full max-w-md hidden border border-blueGrey/30 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4 border-b border-blueGrey/30 pb-2">Tarefa</h3>
+            <input type="hidden" id="mod-task-id"><div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Responsável inicial</label><select id="mod-task-memberid" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></select></div>
+            <label class="flex items-center gap-2 mb-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="mod-task-rotation" class="accent-mainRed" onchange="document.getElementById('mod-task-rotation-members').classList.toggle('hidden', !this.checked)"> Ativar rodízio automático</label>
+            <div id="mod-task-rotation-members" class="hidden mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Integrantes do rodízio</label><select id="mod-task-rotation-members-select" multiple class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white min-h-24"></select></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Título</label><input type="text" id="mod-task-title" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Categoria</label><select id="mod-task-type" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></select></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Horário (opcional)</label><input type="time" id="mod-task-time" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-2">Frequência</label><div class="flex gap-4 mb-2 text-sm"><label><input type="radio" name="task-mode" value="recurring" checked onchange="window.appUI.toggleTaskMode()"> Tarefa personalizada</label><label><input type="radio" name="task-mode" value="single" onchange="window.appUI.toggleTaskMode()"> Tarefa única</label></div><div id="recurring-days" class="grid grid-cols-4 gap-2">
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="0" class="mod-task-day-cb hidden">Dom</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="1" class="mod-task-day-cb hidden">Seg</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="2" class="mod-task-day-cb hidden">Ter</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="3" class="mod-task-day-cb hidden">Qua</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="4" class="mod-task-day-cb hidden">Qui</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="5" class="mod-task-day-cb hidden">Sex</label>
+                <label class="text-center text-xs bg-bgMain py-2 border border-blueGrey/50 rounded-lg cursor-pointer has-[:checked]:bg-blueGrey/40"><input type="checkbox" value="6" class="mod-task-day-cb hidden">Sáb</label>
+            </div><input id="mod-task-date" type="date" class="hidden w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <label class="flex items-center gap-2 mb-3 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="mod-task-wardrobe" class="accent-mainRed"> Esta é a tarefa do guarda-roupa</label>
+            <div class="mb-3"><label class="block text-xs font-bold text-gray-400 mb-1">Penalidade</label><input type="text" id="mod-task-penalty" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"></div>
+            <div class="grid grid-cols-2 gap-3 mb-3"><div><label class="block text-xs font-bold text-gray-400 mb-1">Nível inicial da insígnia</label><select id="mod-task-difficulty" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white"><option value="ferro">Ferro</option><option value="bronze">Bronze</option><option value="prata">Prata</option><option value="ouro">Ouro</option><option value="platina">Platina</option><option value="esmeralda">Esmeralda</option><option value="diamante">Diamante</option><option value="mestre">Mestre</option><option value="grao_mestre">Grão-Mestre</option><option value="desafiante">Desafiante</option><option value="ascendente">Ascendente</option><option value="imortal">Imortal</option><option value="radiante">Radiante</option><option value="supremo">Supremo</option><option value="lenda">Lenda</option></select></div><div><label class="block text-xs font-bold text-gray-400 mb-1">Pontos por conclusão</label><input type="number" id="mod-task-points" value="1" readonly class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white opacity-70"></div></div>
+            <label class="flex items-center gap-2 mb-3 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="mod-task-proof" class="accent-mainRed"> Exigir foto/comprovante</label>
+            <div class="flex justify-between gap-2 mt-4"><button id="delete-task-modal-button" onclick="if (window.appDB.deleteTask(document.getElementById('mod-task-id').value)) window.appUI.closeModals()" class="hidden px-3 py-2 text-mainRed border border-mainRed rounded-lg text-xs font-bold">Excluir tarefa</button><div class="flex gap-2"><button onclick="window.appUI.closeModals()" class="px-4 py-2 text-gray-400 text-sm">Cancelar</button><button onclick="window.appDB.saveTask()" class="px-5 py-2 bg-success rounded-lg font-bold">Salvar</button></div></div>
+        </div>
+        <div id="modal-proof" class="bg-bgCard p-6 rounded-2xl w-full max-w-md hidden border border-blueGrey/30 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 border-b border-blueGrey/30 pb-2">Enviar comprovante</h3>
+            <input type="hidden" id="mod-proof-task-id"><input type="hidden" id="mod-proof-date">
+            <label class="block text-xs font-bold text-gray-400 mb-1">Foto da tarefa</label><input id="mod-proof-file" type="file" accept="image/*" capture="environment" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white mb-3">
+            <label class="block text-xs font-bold text-gray-400 mb-1">Comentário</label><textarea id="mod-proof-comment" rows="3" class="w-full bg-bgMain border border-blueGrey/50 rounded-lg p-2 text-white" placeholder="Conte como foi..." ></textarea>
+            <div class="flex justify-end gap-2 mt-4"><button onclick="window.appUI.closeModals()" class="px-4 py-2 text-gray-400 text-sm">Cancelar</button><button onclick="window.appDB.submitProof()" class="px-5 py-2 bg-success rounded-lg font-bold">Enviar para aprovação</button></div>
+        </div>
+    </div>
+    <div id="badge-preview-overlay" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/95 p-4" role="dialog" aria-modal="true" aria-labelledby="badge-preview-title" tabindex="-1" onclick="if (event.target === this) window.appUI.closeBadgePreview()" onkeydown="if (event.key === 'Escape') window.appUI.closeBadgePreview()">
+        <button type="button" class="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Fechar visualização" onclick="window.appUI.closeBadgePreview()"><i class="fas fa-times"></i></button>
+        <div class="flex max-h-full max-w-full flex-col items-center gap-3">
+            <img id="badge-preview-image" class="badge-preview-image" alt="">
+            <div class="text-center"><h2 id="badge-preview-title" class="text-lg font-bold text-white"></h2><p id="badge-preview-status" class="text-sm text-yellow-300"></p></div>
+        </div>
+    </div>
+
+    <script>
+        // REGISTRO DE SERVICE WORKER PARA INSTALAÇÃO PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js?v=13').catch(err => console.log('SW Fail:', err));
+        }
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCrK5f9ioA5skwP8FmTEsT7b-smE7v-9HM", authDomain: "familytask00.firebaseapp.com", databaseURL: "https://familytask00-default-rtdb.firebaseio.com", projectId: "familytask00", storageBucket: "familytask00.firebasestorage.app", messagingSenderId: "1032345896446", appId: "1:1032345896446:web:4e3c2ecb18fd47848f6caf"
+        };
+        const defaultTypes = [
+            { id: 'paid', label: 'Remunerada', rule: 'paid', color: '#E11D48' },
+            { id: 'bonus', label: 'Bônus', rule: 'bonus', color: '#A855F7' },
+            { id: 'unpaid', label: 'Não remunerada', rule: 'neutral', color: '#6D28D9' },
+            { id: 'punitive', label: 'Castigo', rule: 'punitive', color: '#6D28D9' }
+        ];
+
+        const utils = {
+            getDateKey: (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
+            getAgeCat: (age) => { if(!age) return 'Adulto'; if(age<12) return 'Criança'; if(age<18) return 'Adolescente'; return 'Adulto'; },
+            isWardrobeBonusEnabled: (member) => member.wardrobeBonusEnabled === undefined ? ['Criança', 'Adolescente'].includes(utils.getAgeCat(member.age)) : member.wardrobeBonusEnabled,
+            isWardrobeTask: (task) => task.isWardrobe || /guarda\s*roupa|guarda-roupa|arm[aá]rio/i.test(task.title || ''),
+            getWeekKeys: (date) => { const start = new Date(date); start.setHours(12, 0, 0, 0); start.setDate(start.getDate() - start.getDay()); return Array.from({length: 7}, (_, index) => { const day = new Date(start); day.setDate(start.getDate() + index); return utils.getDateKey(day); }); },
+            getWardrobeAdjustment: (member, tasks, date) => {
+                if (!utils.isWardrobeBonusEnabled(member)) return { amount: 0, label: '' };
+                const wardrobeTasks = tasks.filter(task => String(task.memberId) === String(member.id) && utils.isWardrobeTask(task));
+                if (!wardrobeTasks.length) return { amount: 0, label: 'Sem tarefa de guarda-roupa' };
+                if (date.getDay() !== 6) return { amount: 0, label: 'Semana em andamento' };
+                const currentKey = utils.getDateKey(date);
+                const weekKeys = utils.getWeekKeys(date).filter(key => key <= currentKey);
+                const occurrences = wardrobeTasks.flatMap(task => weekKeys.filter(key => task.days?.includes(new Date(`${key}T12:00:00`).getDay())).map(key => ({ task, key })));
+                if (!occurrences.length) return { amount: 0, label: 'Aguardando tarefa de guarda-roupa' };
+                const organized = occurrences.every(({task, key}) => task.status?.[key] === 'done');
+                return organized ? { amount: 1, label: 'Guarda-roupa organizado' } : { amount: -1, label: 'Guarda-roupa não organizado' };
+            }
+        };
+
+        window.appDB = {
+            STORAGE_KEY: 'familytask-backup-v1',
+            currentUser: null,
+            dbRef: null,
+            connectedRef: null,
+            data: { members: [], tasks: [], types: [], bonusTaskOptions: [], water: {}, history: [], wallets: {}, transactions: [], goals: [], rewards: [], approvals: [] },
+            normalizeWaterMap: (value) => {
+                if (typeof value === 'number') return { total: value };
+                if (!value || typeof value !== 'object') return {};
+                const normalized = {};
+                Object.keys(value).forEach(key => {
+                    const num = Number(value[key]);
+                    if (!Number.isNaN(num)) normalized[key] = num;
+                });
+                return normalized;
+            },
+            normalizeData: (d) => ({
+                members: Array.isArray(d?.members) ? d.members : [],
+                tasks: Array.isArray(d?.tasks) ? d.tasks : [],
+                types: Array.isArray(d?.types) ? d.types : [],
+                bonusTaskOptions: Array.isArray(d?.bonusTaskOptions) ? d.bonusTaskOptions : [],
+                water: d?.water && typeof d.water === 'object' ? d.water : {},
+                history: Array.isArray(d?.history) ? d.history : [],
+                wallets: d?.wallets && typeof d.wallets === 'object' ? d.wallets : {},
+                transactions: Array.isArray(d?.transactions) ? d.transactions : [],
+                goals: Array.isArray(d?.goals) ? d.goals : [],
+                rewards: Array.isArray(d?.rewards) ? d.rewards : [],
+                approvals: Array.isArray(d?.approvals) ? d.approvals : []
+            }),
+            mergeRemoteState: (current, incoming) => {
+                const base = current ? window.appDB.normalizeData(current) : window.appDB.normalizeData({});
+                const next = window.appDB.normalizeData(incoming);
+                return {
+                    members: next.members.length ? next.members : base.members,
+                    tasks: next.tasks.length ? next.tasks : base.tasks,
+                    types: next.types.length ? next.types : base.types,
+                    bonusTaskOptions: Array.isArray(incoming?.bonusTaskOptions) ? next.bonusTaskOptions : base.bonusTaskOptions,
+                    water: Object.keys(next.water).length ? next.water : base.water,
+                    history: next.history.length ? next.history : base.history,
+                    wallets: Object.keys(next.wallets).length ? next.wallets : base.wallets,
+                    transactions: next.transactions.length ? next.transactions : base.transactions,
+                    goals: next.goals.length ? next.goals : base.goals,
+                    rewards: next.rewards.length ? next.rewards : base.rewards,
+                    approvals: next.approvals.length ? next.approvals : base.approvals
+                };
+            },
+            loadLocalBackup: () => {
+                try {
+                    const raw = localStorage.getItem(window.appDB.STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : null;
+                } catch (e) {
+                    console.warn('Backup local indisponível:', e);
+                    return null;
+                }
+            },
+            saveLocalBackup: (d) => {
+                try {
+                    localStorage.setItem(window.appDB.STORAGE_KEY, JSON.stringify(window.appDB.normalizeData(d)));
+                } catch (e) {
+                    console.warn('Não foi possível gravar backup local:', e);
+                }
+            },
+            syncTaskPoints: () => {
+                const d = window.appDB.data;
+                (d.members || []).forEach(member => window.familyServices.gamification.syncWalletPoints(member.id, d));
+            },
+            showAuthError: (message) => {
+                const errorEl = document.getElementById('auth-error');
+                errorEl.textContent = message;
+                errorEl.classList.toggle('hidden', !message);
+                errorEl.classList.toggle('text-mainRed', !message || !message.startsWith('Se houver'));
+                errorEl.classList.toggle('text-success', message.startsWith('Se houver'));
+            },
+            authErrorMessage: (error) => {
+                const messages = {
+                    'auth/invalid-email': 'Informe um endereço de e-mail válido.',
+                    'auth/user-not-found': 'Não foi encontrada uma conta com esse e-mail.',
+                    'auth/wrong-password': 'E-mail ou senha incorretos.',
+                    'auth/invalid-credential': 'E-mail ou senha incorretos.',
+                    'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+                    'auth/network-request-failed': 'Sem conexão com o Firebase. Verifique sua internet.',
+                    'auth/operation-not-allowed': 'O acesso por e-mail e senha não está ativado no Firebase.',
+                    'auth/user-disabled': 'Esta conta foi desativada.'
+                };
+                return messages[error?.code] || 'Não foi possível autenticar. Verifique os dados e tente novamente.';
+            },
+            signIn: async (event) => {
+                event.preventDefault();
+                const submitButton = document.getElementById('auth-submit');
+                const email = document.getElementById('auth-email').value.trim();
+                const password = document.getElementById('auth-password').value;
+                window.appDB.showAuthError('');
+                submitButton.disabled = true;
+                submitButton.textContent = 'Entrando...';
+                try {
+                    await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+                    await firebase.auth().signInWithEmailAndPassword(email, password);
+                } catch (error) {
+                    console.error('Erro de autenticação Firebase:', error);
+                    window.appDB.showAuthError(window.appDB.authErrorMessage(error));
+                } finally {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Entrar';
+                }
+            },
+            resetPassword: async () => {
+                const email = document.getElementById('auth-email').value.trim();
+                if (!email) {
+                    window.appDB.showAuthError('Informe seu e-mail para receber o link de redefinição.');
+                    document.getElementById('auth-email').focus();
+                    return;
+                }
+                window.appDB.showAuthError('');
+                try {
+                    await firebase.auth().sendPasswordResetEmail(email);
+                    window.appDB.showAuthError('Se houver uma conta para esse e-mail, enviaremos um link de redefinição.');
+                } catch (error) {
+                    console.error('Erro ao solicitar redefinição de senha:', error);
+                    window.appDB.showAuthError(window.appDB.authErrorMessage(error));
+                }
+            },
+            signOut: async () => {
+                try {
+                    await firebase.auth().signOut();
+                } catch (error) {
+                    console.error('Erro ao sair da conta Firebase:', error);
+                    document.getElementById('sync-status').innerHTML = '<i class="fas fa-triangle-exclamation text-mainRed"></i> Erro ao sair';
+                }
+            },
+            stopSync: () => {
+                if (window.appDB.connectedRef) window.appDB.connectedRef.off();
+                if (window.appDB.dbRef) window.appDB.dbRef.off();
+                window.appDB.connectedRef = null;
+                window.appDB.dbRef = null;
+            },
+            startSync: () => {
+                const statusEl = document.getElementById('sync-status');
+                const dbRef = firebase.database().ref('familyTasksApp');
+                const connectedRef = firebase.database().ref('.info/connected');
+                window.appDB.dbRef = dbRef;
+                window.appDB.connectedRef = connectedRef;
+
+                connectedRef.on('value', snap => {
+                    const online = !!snap.val();
+                    statusEl.innerHTML = online ? '<i class="fas fa-wifi text-success"></i> Nuvem (Online)' : '<i class="fas fa-wifi-slash text-mainRed"></i> Offline';
+                });
+
+                dbRef.on('value', snap => {
+                    const remote = snap.val();
+                    const cloudData = remote ? window.appDB.normalizeData(remote) : null;
+                    const localData = window.appDB.data || window.appDB.normalizeData({});
+                    const cloudHasContent = cloudData && [
+                        cloudData.members.length,
+                        cloudData.tasks.length,
+                        cloudData.history.length,
+                        cloudData.transactions.length,
+                        cloudData.bonusTaskOptions.length,
+                        Object.keys(cloudData.wallets).length
+                    ].some(Boolean);
+                    const nextData = cloudHasContent ? cloudData : localData;
+
+                    window.appDB.data = window.appDB.normalizeData(nextData);
+                    window.appDB.syncTaskPoints();
+                    window.appDB.saveLocalBackup(window.appDB.data);
+
+                    if (window.app && typeof window.app.render === 'function') window.app.render();
+
+                    if (!cloudHasContent && [window.appDB.data.members.length, window.appDB.data.tasks.length, window.appDB.data.history.length, window.appDB.data.bonusTaskOptions.length].some(Boolean)) {
+                        dbRef.set(window.appDB.data).catch(err => {
+                            statusEl.innerHTML = '<i class="fas fa-triangle-exclamation text-mainRed"></i> Sem permissão no banco';
+                            console.error('Erro ao gravar no banco:', err);
+                        });
+                    }
+                }, err => {
+                    statusEl.innerHTML = err.code === 'PERMISSION_DENIED'
+                        ? '<i class="fas fa-triangle-exclamation text-mainRed"></i> Sem permissão no banco'
+                        : '<i class="fas fa-triangle-exclamation text-mainRed"></i> Falha na conexão';
+                    console.error('Erro de conexão Firebase:', err);
+                });
+            },
+            init: () => {
+                const authScreen = document.getElementById('auth-screen');
+                const authForm = document.getElementById('auth-form');
+                document.body.classList.add('auth-locked');
+                authScreen.classList.remove('hidden');
+                document.getElementById('auth-loading').classList.remove('hidden');
+                authForm.classList.add('hidden');
+
+                const localBackup = window.appDB.loadLocalBackup();
+                if (localBackup) window.appDB.data = window.appDB.normalizeData(localBackup);
+                window.appDB.syncTaskPoints();
+                window.appDB.saveLocalBackup(window.appDB.data);
+
+                if (window.location.protocol === 'file:') {
+                    document.getElementById('auth-loading').textContent = 'Abra o FamilyTask em localhost ou HTTPS para conectar ao Firebase.';
+                    console.error('Firebase não funciona em file://. Rode em localhost ou HTTPS.');
+                    return;
+                }
+
+                if (!window.firebase || typeof firebase.auth !== 'function') {
+                    document.getElementById('auth-loading').textContent = 'O módulo de autenticação do Firebase não carregou. Verifique sua conexão e recarregue a página.';
+                    console.error('Firebase Authentication SDK não está disponível.');
+                    return;
+                }
+
+                try {
+                    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                } catch (error) {
+                    console.error('Erro ao iniciar Firebase:', error);
+                    document.getElementById('auth-loading').textContent = 'Não foi possível iniciar o Firebase. Verifique a configuração do projeto.';
+                    return;
+                }
+
+                firebase.auth().onAuthStateChanged(user => {
+                    window.appDB.currentUser = user;
+                    if (!user) {
+                        window.appDB.stopSync();
+                        document.body.classList.add('auth-locked');
+                        authScreen.classList.remove('hidden');
+                        document.getElementById('auth-loading').classList.add('hidden');
+                        authForm.classList.remove('hidden');
+                        document.getElementById('auth-account-email').textContent = '';
+                        document.getElementById('sync-status').innerHTML = '<i class="fas fa-user-lock text-gray-400"></i> Entre para sincronizar';
+                        return;
+                    }
+
+                    window.appDB.showAuthError('');
+                    authForm.reset();
+                    document.getElementById('auth-account-email').textContent = user.email || 'Conta autenticada';
+                    authScreen.classList.add('hidden');
+                    document.body.classList.remove('auth-locked');
+                    document.getElementById('sync-status').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando...';
+                    window.appDB.stopSync();
+                    window.appDB.startSync();
+                    if (window.app && typeof window.app.render === 'function') window.app.render();
+                }, error => {
+                    console.error('Erro ao verificar autenticação Firebase:', error);
+                    document.getElementById('auth-loading').textContent = 'Falha ao verificar a conta. Verifique sua conexão e recarregue a página.';
+                });
+            },
+            save: (d) => {
+                const payload = window.appDB.normalizeData(d || window.appDB.data);
+                window.appDB.data = payload;
+                window.appDB.saveLocalBackup(payload);
+
+                if (!window.firebase || !firebase.apps.length || !firebase.auth().currentUser) {
+                    if (window.app && typeof window.app.render === 'function') window.app.render();
+                    return Promise.resolve();
+                }
+
+                return firebase.database().ref('familyTasksApp').transaction(current => {
+                    const currentData = current ? window.appDB.normalizeData(current) : window.appDB.normalizeData({});
+                    const merged = window.appDB.mergeRemoteState(currentData, payload);
+                    return merged;
+                }, (error, committed) => {
+                    if (error) {
+                        console.error('Save error:', error);
+                        if (error.code === 'PERMISSION_DENIED') {
+                            document.getElementById('sync-status').innerHTML = '<i class="fas fa-triangle-exclamation text-mainRed"></i> Sem permissão no banco';
+                        }
+                        return;
+                    }
+                    if (!committed) {
+                        console.warn('Save não foi confirmado pela transação do Firebase.');
+                    }
+                });
+            },
+            addHistory: (kind, label, memberId = null, value = '') => {
+                const d = window.appDB.data;
+                if (!Array.isArray(d.history)) d.history = [];
+                d.history.unshift({ id: Date.now() + Math.random(), date: utils.getDateKey(new Date()), kind, label, memberId, value });
+                d.history = d.history.slice(0, 1000);
+            },
+            notify: (title, body) => {
+                if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: 'logo.png' });
+            },
+            addBonusTaskOption: () => {
+                const titleInput = document.getElementById('new-bonus-task-title');
+                const valueInput = document.getElementById('new-bonus-task-value');
+                const title = titleInput.value.trim();
+                const value = Number(valueInput.value);
+                if (!title || !Number.isFinite(value) || value <= 0) return alert('Informe o nome da tarefa e um bônus maior que zero.');
+                const d = window.appDB.data;
+                d.bonusTaskOptions.push({ id: `bonus_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, title, value });
+                titleInput.value = '';
+                valueInput.value = '';
+                window.appDB.save(d);
+            },
+            addBonusTask: () => {
+                const d = window.appDB.data;
+                const memberId = document.getElementById('bonus-task-member').value;
+                const member = d.members.find(item => String(item.id) === String(memberId));
+                const titleInput = document.getElementById('bonus-task-title');
+                const valueInput = document.getElementById('bonus-task-value');
+                const title = titleInput.value.trim();
+                const rawValue = Number(valueInput.value);
+                const value = Math.round((rawValue + Number.EPSILON) * 100) / 100;
+                if (!member) return alert('Selecione um integrante para a tarefa bônus.');
+                if (!title || !Number.isFinite(rawValue) || value <= 0) return alert('Informe a tarefa e um bônus maior que zero.');
+                const date = utils.getDateKey(window.appUI.curDate);
+                let taskId = Date.now();
+                while (d.tasks.some(item => String(item.id) === String(taskId))) taskId++;
+                const task = {
+                    id: taskId,
+                    memberId: member.id,
+                    title,
+                    type: 'bonus',
+                    mode: 'single',
+                    date,
+                    days: [],
+                    time: '',
+                    penalty: '',
+                    isWardrobe: false,
+                    isBonusTask: true,
+                    bonusValue: value,
+                    difficulty: 'bronze',
+                    points: 1,
+                    requiresProof: false,
+                    status: { [date]: 'pending' }
+                };
+                d.tasks.push(task);
+                window.appDB.addHistory('task', `Tarefa bônus adicionada: ${title}`, member.id);
+                window.appDB.save(d);
+                titleInput.value = '';
+                valueInput.value = '';
+                document.getElementById('bonus-task-template').value = '';
+                window.app.render();
+            },
+            updateBonusTaskOption: (id) => {
+                const d = window.appDB.data;
+                const option = d.bonusTaskOptions.find(item => String(item.id) === String(id));
+                if (!option) return;
+                const title = document.getElementById(`bonus-title-${id}`).value.trim();
+                const value = Number(document.getElementById(`bonus-value-${id}`).value);
+                if (!title || !Number.isFinite(value) || value <= 0) return alert('Informe o nome da tarefa e um bônus maior que zero.');
+                option.title = title;
+                option.value = value;
+                window.appDB.save(d);
+            },
+            deleteBonusTaskOption: (id) => {
+                if (!confirm('Excluir esta opção de tarefa bônus?')) return;
+                const d = window.appDB.data;
+                d.bonusTaskOptions = d.bonusTaskOptions.filter(item => String(item.id) !== String(id));
+                window.appDB.save(d);
+            },
+            submitProof: async () => {
+                const taskId = document.getElementById('mod-proof-task-id').value;
+                const date = document.getElementById('mod-proof-date').value;
+                const task = window.appDB.data.tasks.find(item => String(item.id) === String(taskId));
+                const file = document.getElementById('mod-proof-file').files[0];
+                if (!task || !file) return alert('Selecione uma foto para enviar.');
+                const proofUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+                window.familyServices.approval.submit(task, date, { id: `proof_${Date.now()}`, url: proofUrl, mimeType: file.type, createdAt: new Date().toISOString() }, document.getElementById('mod-proof-comment').value);
+                window.appDB.addHistory('approval', `Comprovante enviado: ${task.title}`, task.memberId);
+                window.appDB.save(window.appDB.data); window.appUI.closeModals(); window.app.render();
+            },
+            reviewApproval: (id, status) => {
+                const feedback = prompt(status === 'rejected' ? 'Feedback para revisão:' : 'Observação opcional para aprovar:', '') || '';
+                const approval = window.familyServices.approval.review(id, status, feedback);
+                if (!approval || approval.status !== status) return;
+                window.appDB.syncTaskPoints();
+                window.appDB.addHistory('approval', status === 'approved' ? 'Tarefa aprovada' : 'Tarefa devolvida para revisão', approval.childId);
+                window.appDB.save(window.appDB.data); window.app.render();
+            },
+            addGoal: () => {
+                const children = window.appDB.data.members.filter(member => Number(member.age) < 18);
+                if (!children.length) return alert('Cadastre uma criança ou adolescente primeiro.');
+                const child = children.length === 1 ? children[0] : children.find(item => String(item.id) === String(window.appUI.selectedMemberId)) || children[0];
+                const title = prompt(`Nome da meta para ${child.name}:`);
+                const targetAmount = Number(prompt('Valor da meta em R$:', '100'));
+                if (!title || !Number.isFinite(targetAmount) || targetAmount <= 0) return;
+                const now = new Date().toISOString();
+                window.appDB.data.goals.unshift({ id: `goal_${Date.now()}`, childId: child.id, title, targetAmount, accumulatedAmount: 0, createdAt: now, updatedAt: now });
+                window.appDB.addHistory('goal', `Meta criada: ${title}`, child.id);
+                window.appDB.save(window.appDB.data); window.app.render();
+            },
+            addReward: () => {
+                const title = prompt('Nome do prêmio:');
+                const pointsCost = Number(prompt('Custo em pontos:', '30'));
+                if (!title || !Number.isFinite(pointsCost) || pointsCost <= 0) return;
+                const now = new Date().toISOString();
+                window.appDB.data.rewards.unshift({ id: `reward_${Date.now()}`, title, pointsCost, active: true, createdAt: now, updatedAt: now });
+                window.appDB.addHistory('reward', `Prêmio criado: ${title}`);
+                window.appDB.save(window.appDB.data); window.app.render();
+            },
+            purchaseReward: (rewardId) => {
+                const reward = window.appDB.data.rewards.find(item => item.id === rewardId);
+                const children = window.appDB.data.members.filter(member => Number(member.age) < 18);
+                if (!reward || !children.length) return;
+                const child = children.length === 1 ? children[0] : children.find(item => String(item.id) === String(window.appUI.selectedMemberId)) || children.find(item => String(item.id) === String(window.appUI.selectedMemberId)) || children[0];
+                const wallet = window.familyServices.wallet.ensure(child.id, window.appDB.data);
+                if (!window.familyServices.wallet.purchase(child.id, reward, window.appDB.data)) return alert(`${child.name} não possui pontos suficientes.`);
+                window.appDB.addHistory('reward', `${child.name} resgatou ${reward.title}`, child.id, -reward.pointsCost);
+                window.appDB.save(window.appDB.data); window.app.render();
+            },
+            configureWallet: (childId) => {
+                const wallet = window.familyServices.wallet.ensure(childId, window.appDB.data);
+                const conversionPoints = Number(prompt('Quantos pontos valem R$ 1,00?', wallet.conversion.points));
+                const spend = Number(prompt('Percentual para Gastar?', wallet.split.spend));
+                const save = Number(prompt('Percentual para Guardar?', wallet.split.save));
+                const help = Number(prompt('Percentual para Ajudar?', wallet.split.help));
+                if (!Number.isFinite(conversionPoints) || conversionPoints <= 0) return alert('Use uma taxa de conversão válida.');
+                const total = Number(spend) + Number(save) + Number(help);
+                if (!Number.isFinite(total) || total <= 0 || Math.abs(total - 100) > 0.0001) return alert('Use valores válidos cuja divisão some 100%.');
+                wallet.conversion = { points: conversionPoints, money: 1 };
+                wallet.split = { spend: Number(spend), save: Number(save), help: Number(help) };
+                window.appDB.save(window.appDB.data); window.app.render();
+            },
+            addWater: (amt, memberId = null) => {
+                let d = window.appDB.data; 
+                let k = utils.getDateKey(window.appUI.curDate); 
+                amt = Number(amt);
+                if (!Number.isFinite(amt) || amt <= 0) return;
+                if (!d.water[k]) d.water[k] = {}; 
+                const targetMember = memberId ?? window.appUI.selectedMemberId ?? (d.members[0] ? d.members[0].id : null); 
+                const member = d.members.find(m => String(m.id) === String(targetMember));
+                if (!member || Number(member.waterGoal || 0) <= 0) return;
+                if (targetMember !== null && targetMember !== undefined) {
+                    const current = Number(d.water[k][targetMember] || 0);
+                    d.water[k][targetMember] = current + amt;
+                } else {
+                    const current = Number(d.water[k].total || 0);
+                    d.water[k].total = current + amt;
+                }
+                window.appDB.addHistory('water', `Consumo de ${amt} ml`, targetMember, amt);
+                window.appDB.notify('Hidratação registrada', `${amt} ml adicionados ao consumo de hoje.`);
+                window.app.render();
+                window.appDB.save(d);
+            },
+            updateTask: (id, k, st) => {
+                const d = window.appDB.data;
+                const t = d.tasks.find(x => String(x.id) === String(id));
+                if (!t) return;
+                if (st === 'done' && t.requiresProof) {
+                    document.getElementById('mod-proof-task-id').value = t.id;
+                    document.getElementById('mod-proof-date').value = k;
+                    document.getElementById('mod-proof-file').value = '';
+                    document.getElementById('mod-proof-comment').value = '';
+                    document.getElementById('modal-overlay').classList.replace('hidden', 'flex');
+                    document.getElementById('modal-proof').classList.remove('hidden');
+                    return;
+                }
+                t.status = t.status || {};
+                t.status[k] = st;
+                window.appDB.syncTaskPoints();
+                const type = [...defaultTypes, ...(d.types || [])].find(x => x.id === t.type);
+                window.appDB.addHistory('task', `${t.title}: ${st === 'done' ? 'concluída' : 'não concluída'}`, t.memberId, st);
+                if (type?.rule === 'paid' || type?.rule === 'bonus') {
+                    const financeValue = st === 'done' ? (type.rule === 'bonus' ? Number(t.bonusValue ?? 1) : 1) : (t.isRandomBonus || t.isBonusTask ? 0 : -1);
+                    if (financeValue !== 0) window.appDB.addHistory('finance', `${st === 'done' ? 'Ganho' : 'Perda'} relacionado a ${t.title}`, t.memberId, financeValue);
+                }
+                window.appDB.notify('Tarefa atualizada', `${t.title} foi marcada como ${st === 'done' ? 'concluída' : 'não concluída'}.`);
+                window.app.render();
+                window.appDB.save(d);
+            },
+            deleteTask: (id) => { if (!id || !confirm('Excluir esta tarefa?')) return false; let d = window.appDB.data; d.tasks = d.tasks.filter(x=>String(x.id)!==String(id)); window.app.render(); window.appDB.save(d); return true; },
+            deleteMember: (id) => { if (!confirm('Excluir este integrante, suas tarefas e registros de hidratação?')) return; let d = window.appDB.data; d.members = d.members.filter(x=>String(x.id)!==String(id)); d.tasks = d.tasks.filter(x=>String(x.memberId)!==String(id)); Object.keys(d.water).forEach(day => { if (d.water[day] && d.water[day][id] !== undefined) delete d.water[day][id]; }); if (String(window.appUI.selectedMemberId)===String(id)) window.appUI.selectedMemberId=null; window.app.render(); window.appDB.save(d); },
+            deleteWaterGoal: () => { const id = document.getElementById('mod-mem-id').value; const member = window.appDB.data.members.find(x=>String(x.id)===String(id)); if (!member || !member.waterGoal || !confirm('Excluir a meta e os registros de hidratação deste integrante?')) return; member.waterGoal=0; Object.keys(window.appDB.data.water).forEach(day => { if (window.appDB.data.water[day] && window.appDB.data.water[day][id] !== undefined) delete window.appDB.data.water[day][id]; }); window.app.render(); window.appDB.save(window.appDB.data); window.appUI.closeModals(); },
+            deleteType: (id) => { if (!confirm('Excluir esta categoria personalizada?')) return; let d = window.appDB.data; d.types = d.types.filter(x=>x.id!==id); window.app.render(); window.appDB.save(d); },
+            saveMember: async () => {
+                let id = document.getElementById('mod-mem-id').value; let n = document.getElementById('mod-mem-name').value; let a = parseInt(document.getElementById('mod-mem-age').value); let b = parseFloat(document.getElementById('mod-mem-base').value)||0; let av = document.getElementById('mod-mem-avatar').value||n; let goal = parseInt(document.getElementById('mod-mem-goal').value) || 0; let photo = document.getElementById('mod-mem-photo').value || ''; let wardrobeBonusEnabled = document.getElementById('mod-mem-wardrobe-bonus').checked;
+                const fileInput = document.getElementById('mod-mem-photo-file');
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    photo = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result || '');
+                        reader.onerror = () => reject(new Error('Falha ao ler imagem'));
+                        reader.readAsDataURL(fileInput.files[0]);
+                    });
+                }
+                if(!n) return; let d = window.appDB.data; let m = d.members.find(x=>x.id==id);
+                const currentMonth = `${window.appUI.curDate.getFullYear()}-${String(window.appUI.curDate.getMonth()+1).padStart(2,'0')}`;
+                if(m) { m.name=n; m.age=a; m.avatar=av; m.photo=photo; m.waterGoal=goal; m.wardrobeBonusEnabled=wardrobeBonusEnabled; window.baseService.setForMonth(m, currentMonth, b); window.appDB.addHistory('member', `Usuário ${n} atualizado`, m.id); } else { const newId = Date.now(); const newMember = {id: newId, name:n, age:a, avatar:av, photo:photo, waterGoal:goal, wardrobeBonusEnabled}; window.baseService.setForMonth(newMember, currentMonth, b); d.members.push(newMember); window.appDB.addHistory('member', `Usuário ${n} cadastrado`, newId); }
+                window.appDB.save(d); window.appUI.closeModals();
+            },
+            saveTask: () => {
+                let id = document.getElementById('mod-task-id').value; let mid = document.getElementById('mod-task-memberid').value; let t = document.getElementById('mod-task-title').value; let typ = document.getElementById('mod-task-type').value; let p = document.getElementById('mod-task-penalty').value; let isWardrobe = document.getElementById('mod-task-wardrobe').checked; let mode = document.querySelector('input[name="task-mode"]:checked')?.value || 'recurring'; let singleDate = document.getElementById('mod-task-date').value; let time = document.getElementById('mod-task-time').value; let difficulty = document.getElementById('mod-task-difficulty').value; let pointsInput = Number(document.getElementById('mod-task-points').value) || 0; let requiresProof = document.getElementById('mod-task-proof').checked; let rotationEnabled = document.getElementById('mod-task-rotation').checked; let rotationMemberIds = Array.from(document.getElementById('mod-task-rotation-members-select').selectedOptions).map(option => option.value);
+                let ds = []; document.querySelectorAll('.mod-task-day-cb:checked').forEach(c=>ds.push(parseInt(c.value)));
+                if(!t || !mid || (mode === 'single' && !singleDate)) return; let d = window.appDB.data; let tk = d.tasks.find(x=>x.id==id);
+
+                const baseTask = { difficulty, points: 1, title: t, type: typ, penalty: p, mode, requiresProof, isWardrobe };
+                const resolvedPoints = window.familyServices && window.familyServices.task && typeof window.familyServices.task.pointsFor === 'function'
+                    ? window.familyServices.task.pointsFor(baseTask)
+                    : 1;
+
+                const rotation = rotationEnabled && rotationMemberIds.length > 1 ? { enabled: true, memberIds: rotationMemberIds, currentIndex: 0, startDate: new Date().toISOString().slice(0, 10) } : undefined;
+                if (rotationEnabled && rotationMemberIds.length > 0 && !tk) {
+                    mid = rotationMemberIds[0];
+                }
+
+                if(tk) { tk.memberId=parseInt(mid); tk.title=t; tk.type=typ; tk.penalty=p; tk.days=mode === 'single' ? [] : ds; tk.date=mode === 'single' ? singleDate : ''; tk.time=time; tk.mode=mode; tk.isWardrobe=isWardrobe; tk.difficulty=difficulty; tk.points=1; tk.requiresProof=requiresProof; tk.rotation=rotation; window.appDB.addHistory('task', `Tarefa ${t} atualizada`, tk.memberId); } else { const newTask = {id: Date.now(), memberId:parseInt(mid), title:t, type:typ, penalty:p, days:mode === 'single' ? [] : ds, date:mode === 'single' ? singleDate : '', time, mode, isWardrobe, difficulty, points: 1, requiresProof, rotation, status:{}}; d.tasks.push(newTask); window.appDB.addHistory('task', `Tarefa ${t} criada`, newTask.memberId); }
+                if (rotation && rotation.enabled && rotation.memberIds.length) {
+                    const currentOwner = window.familyServices && window.familyServices.task ? window.familyServices.task.nextRotationMember({ rotation }, d.members) : null;
+                    if (currentOwner) {
+                        const targetTask = tk || d.tasks[d.tasks.length - 1];
+                        if (targetTask) {
+                            targetTask.memberId = currentOwner;
+                            targetTask.rotation = { ...rotation, currentIndex: rotation.memberIds.indexOf(String(currentOwner)) };
+                        }
+                    }
+                }
+                window.appDB.save(d); window.appUI.closeModals();
+            }
+        };
+
+        window.appUI = {
+            curDate: new Date(), chartIns: null, selectedMemberId: null, lastRankMap: {}, taskExplorerTimer: null,
+            setTheme: (theme) => {
+                const isLight = theme === 'light';
+                document.documentElement.classList.toggle('light-mode', isLight);
+                try { localStorage.setItem('familytask-theme', isLight ? 'light' : 'dark'); } catch (error) {}
+                const button = document.getElementById('theme-toggle');
+                if (button) {
+                    const nextTheme = isLight ? 'escuro' : 'claro';
+                    button.setAttribute('aria-label', `Ativar tema ${nextTheme}`);
+                    button.title = `Ativar tema ${nextTheme}`;
+                    button.innerHTML = `<i class="fas fa-${isLight ? 'moon' : 'sun'}" aria-hidden="true"></i>`;
+                }
+                const themeColor = document.querySelector('meta[name="theme-color"]');
+                if (themeColor) themeColor.content = isLight ? '#edf2f4' : '#8B5CF6';
+                if (window.appUI.chartIns) window.appUI.updateChart();
+            },
+            toggleTheme: () => {
+                const isLight = document.documentElement.classList.contains('light-mode');
+                window.appUI.setTheme(isLight ? 'dark' : 'light');
+            },
+            initTheme: () => {
+                let theme = document.documentElement.classList.contains('light-mode') ? 'light' : 'dark';
+                try { theme = localStorage.getItem('familytask-theme') || theme; } catch (error) {}
+                window.appUI.setTheme(theme);
+            },
+            spawnLevelUpParticles: () => {
+                const container = document.getElementById('level-up-particles');
+                if (!container) return;
+                container.innerHTML = '';
+                const colors = ['#ffd260', '#ffb347', '#ff6ec7', '#7ee7ff', '#8cff9f', '#ffffff'];
+                for (let i = 0; i < 36; i += 1) {
+                    const particle = document.createElement('span');
+                    particle.className = 'level-up-particle';
+                    const angle = (Math.PI * 2 * i) / 36;
+                    const distance = 80 + Math.random() * 140;
+                    const dx = Math.cos(angle) * distance;
+                    const dy = Math.sin(angle) * distance - 20;
+                    particle.style.background = `radial-gradient(circle, ${colors[i % colors.length]} 0%, rgba(255,255,255,0.8) 30%, rgba(255,255,255,0) 80%)`;
+                    particle.style.setProperty('--dx', `${dx}px`);
+                    particle.style.setProperty('--dy', `${dy}px`);
+                    particle.style.animationDelay = `${(i % 9) * 0.06}s`;
+                    particle.style.opacity = '0';
+                    container.appendChild(particle);
+                }
+            },
+            showLevelUpToast: (member, previousRank, currentRank) => {
+                const overlay = document.getElementById('level-up-overlay');
+                if (!overlay || !member || !currentRank) return;
+                const memberName = member.name || 'Membro';
+                const previousTitle = previousRank?.current?.title || 'Ferro';
+                const currentTitle = currentRank?.current?.title || previousTitle;
+                const memberEl = document.getElementById('level-up-member');
+                const rankEl = document.getElementById('level-up-rank');
+                const subEl = document.getElementById('level-up-sub');
+                if (memberEl) memberEl.textContent = memberName;
+                if (rankEl) rankEl.textContent = currentTitle;
+                if (subEl) subEl.textContent = previousTitle !== currentTitle ? `Subiu de ${previousTitle} para ${currentTitle}` : 'Nível alcançado';
+                window.appUI.spawnLevelUpParticles();
+                overlay.classList.remove('hidden');
+                overlay.classList.add('active');
+                clearTimeout(window.appUI.levelUpTimer);
+                window.appUI.levelUpTimer = setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('active');
+                }, 3200);
+            },
+            syncLevelUps: () => {
+                const d = window.appDB?.data;
+                if (!d || !Array.isArray(d.members)) return;
+                d.members.forEach(member => {
+                    const current = window.familyServices?.gamification?.memberRank(member.id, d);
+                    const previous = window.appUI.lastRankMap?.[member.id];
+                    if (previous && previous.current && current && current.current && previous.current.id !== current.current.id) {
+                        window.appUI.showLevelUpToast(member, previous, current);
+                    }
+                    window.appUI.lastRankMap[member.id] = current || previous;
+                });
+            },
+            switchTab: (id) => { document.querySelectorAll('.tab-content').forEach(e=>e.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.remove('bg-mainRed','text-white');b.classList.add('text-gray-400')}); document.querySelector(`[data-target="${id}"]`).classList.add('bg-mainRed','text-white'); },
+            switchView: (mode) => {
+                const parent = document.getElementById('parent-panel');
+                const child = document.getElementById('child-panel');
+                const buttons = document.querySelectorAll('.view-mode-btn');
+                const isParent = mode === 'parent';
+                if (parent) parent.classList.toggle('hidden', !isParent);
+                if (child) child.classList.toggle('hidden', isParent);
+                buttons.forEach(btn => {
+                    const active = btn.dataset.viewMode === mode;
+                    btn.classList.toggle('bg-mainRed', active);
+                    btn.classList.toggle('text-white', active);
+                    btn.classList.toggle('text-gray-300', !active);
+                });
+            },
+            addGoal: () => window.appDB.addGoal(),
+            addReward: () => window.appDB.addReward(),
+            purchaseReward: (rewardId) => window.appDB.purchaseReward(rewardId),
+            configureWallet: (childId) => window.appDB.configureWallet(childId),
+            getRankBadgeHtml: (rank, compact = false, customization = {}) => {
+                const current = rank?.current || { title: 'Ferro', bird: 'Pinguim-azul' };
+                const palette = {
+                    ferro: { primary: '#b9c8d9', secondary: '#6f7e90', accent: '#eaf3ff', glow: 'rgba(173, 216, 255, 0.5)' },
+                    bronze: { primary: '#c37b3b', secondary: '#6f3d16', accent: '#f8d7ac', glow: 'rgba(236, 145, 62, 0.45)' },
+                    prata: { primary: '#c9d2dc', secondary: '#687787', accent: '#edf3ff', glow: 'rgba(190, 203, 227, 0.45)' },
+                    ouro: { primary: '#e2b63d', secondary: '#7d5607', accent: '#ffefac', glow: 'rgba(255, 204, 77, 0.5)' },
+                    platina: { primary: '#dfe8f2', secondary: '#6b7890', accent: '#ffffff', glow: 'rgba(182, 193, 214, 0.45)' },
+                    esmeralda: { primary: '#37d497', secondary: '#0d5a3d', accent: '#d5ffe8', glow: 'rgba(76, 255, 178, 0.45)' },
+                    diamante: { primary: '#7be6ff', secondary: '#214b76', accent: '#ecfbff', glow: 'rgba(116, 213, 255, 0.45)' },
+                    mestre: { primary: '#a676ff', secondary: '#3b1d7e', accent: '#f0e5ff', glow: 'rgba(157, 101, 255, 0.5)' },
+                    grao_mestre: { primary: '#ff8a8a', secondary: '#7e2323', accent: '#ffe0e0', glow: 'rgba(255, 136, 136, 0.5)' },
+                    desafiante: { primary: '#fdaf4d', secondary: '#7a3d0d', accent: '#fff0d1', glow: 'rgba(255, 166, 79, 0.45)' },
+                    ascendente: { primary: '#56c2ff', secondary: '#0d4d7b', accent: '#dff5ff', glow: 'rgba(86, 194, 255, 0.5)' },
+                    imortal: { primary: '#ff5b76', secondary: '#6d0d27', accent: '#ffd8df', glow: 'rgba(255, 101, 136, 0.45)' },
+                    radiante: { primary: '#ffd866', secondary: '#7c6100', accent: '#fff8da', glow: 'rgba(255, 219, 102, 0.5)' },
+                    supremo: { primary: '#ffbf69', secondary: '#74480e', accent: '#fff1d8', glow: 'rgba(255, 190, 84, 0.5)' },
+                    lenda: { primary: '#ffed87', secondary: '#7a5400', accent: '#fff8cf', glow: 'rgba(255, 224, 102, 0.55)' }
+                };
+                const selected = palette[current.id] || palette.ferro;
+                const sizeClass = compact ? 'rank-badge-small' : '';
+                const lockedClass = rank?.unlocked === false ? 'rank-badge-locked' : '';
+                const icon = customization.icon || '🐧';
+                const activityLabel = customization.activityLabel ? ` • ${customization.activityLabel}` : '';
+                return `
+                    <div class="rank-badge-wrap ${sizeClass} ${lockedClass}" style="--badge-primary:${selected.primary}; --badge-secondary:${selected.secondary}; --badge-accent:${selected.accent}; --badge-glow:${selected.glow};">
+                        <div class="rank-badge">
+                            <div class="rank-badge-sheen"></div>
+                            <div class="rank-badge-crown"></div>
+                            <div class="rank-badge-bolts">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                            <div class="rank-badge-sparkles" aria-hidden="true">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                            <div class="rank-badge-inner">
+                                <div class="rank-badge-species">${current.bird}${activityLabel}</div>
+                                <div class="rank-badge-icon">${icon}</div>
+                                <div class="rank-badge-level">${current.title}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            getTaskBadgeHtml: (task, compact = true) => {
+                const collection = window.familyServices.gamification.taskBadgeCollection(task);
+                if (!collection) return '<div class="task-badge task-badge-small"><span class="task-badge-header">Sem insígnias cadastradas</span></div>';
+                const unlocked = Math.min(Math.floor(collection.completed / 50), collection.images.length);
+                const sizeClass = compact ? 'task-badge-small' : '';
+                return `<div class="task-badge ${sizeClass}" title="${task.title}: ${unlocked} de ${collection.images.length} insígnias conquistadas">
+                    <div class="task-badge-header"><span>Insígnias</span><span>${unlocked}/${collection.images.length} conquistadas</span></div>
+                    <div class="task-badge-track" role="list" aria-label="Insígnias de ${task.title}">
+                        ${collection.images.map((image, index) => {
+                            const earned = index < unlocked;
+                            const pointsRemaining = Math.max((index + 1) * 50 - collection.completed, 0);
+                            const stateClass = earned ? 'task-badge-earned' : 'task-badge-locked';
+                            const stateLabel = earned ? 'Conquistada' : `Faltam ${pointsRemaining} pts`;
+                            return `<div class="task-badge-item ${stateClass}" role="listitem" title="Insígnia ${index + 1}: ${stateLabel}">
+                                <button type="button" class="task-badge-trigger" aria-label="Ampliar insígnia ${index + 1}: ${stateLabel}" onclick="window.appUI.openBadgePreview('${image}', ${index + 1}, '${stateLabel}', this)">
+                                    <img src="${image}" class="task-badge-image" alt="" loading="lazy">
+                                </button>
+                                <span class="task-badge-number">${index + 1}</span>
+                                <span class="task-badge-progress">${stateLabel}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            },
+            badgePreviewTrigger: null,
+            openBadgePreview: (image, index, stateLabel, trigger) => {
+                window.appUI.badgePreviewTrigger = trigger;
+                document.getElementById('badge-preview-image').src = image;
+                document.getElementById('badge-preview-image').alt = `Insígnia ${index}`;
+                document.getElementById('badge-preview-title').textContent = `Insígnia ${index}`;
+                document.getElementById('badge-preview-status').textContent = stateLabel;
+                const overlay = document.getElementById('badge-preview-overlay');
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+                overlay.focus();
+            },
+            closeBadgePreview: () => {
+                const overlay = document.getElementById('badge-preview-overlay');
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+                document.getElementById('badge-preview-image').src = '';
+                window.appUI.badgePreviewTrigger?.focus();
+                window.appUI.badgePreviewTrigger = null;
+            },
+            closeModals: () => { document.getElementById('modal-overlay').classList.replace('flex','hidden'); document.querySelectorAll('#modal-overlay > div').forEach(m=>m.classList.add('hidden')); },
+            updateWardrobeBonusDefault: () => {
+                if (document.getElementById('mod-mem-id').value) return;
+                const age = Number(document.getElementById('mod-mem-age').value);
+                document.getElementById('mod-mem-wardrobe-bonus').checked = age > 0 && age < 18;
+            },
+            openMemberModal: (id) => { 
+                let m = window.appDB.data.members.find(x=>x.id===id) || {id:'',name:'',age:'',base:'',avatar:'',photo:'',waterGoal:0};
+                const wardrobeEnabled = m.wardrobeBonusEnabled === undefined ? ['Criança', 'Adolescente'].includes(utils.getAgeCat(m.age)) : m.wardrobeBonusEnabled;
+                document.getElementById('mod-mem-id').value=m.id; document.getElementById('mod-mem-name').value=m.name; document.getElementById('mod-mem-age').value=m.age; document.getElementById('mod-mem-base').value=m.base; document.getElementById('mod-mem-wardrobe-bonus').checked=wardrobeEnabled; document.getElementById('mod-mem-avatar').value=m.avatar; document.getElementById('mod-mem-goal').value=m.waterGoal || ''; document.getElementById('mod-mem-photo').value=m.photo || ''; const fileInput = document.getElementById('mod-mem-photo-file'); if(fileInput) fileInput.value='';
+                document.getElementById('modal-overlay').classList.replace('hidden','flex'); document.getElementById('modal-member').classList.remove('hidden');
+            },
+            showMemberTasks: (memberId) => {
+                const d = window.appDB.data;
+                const member = d.members.find(x => x.id === memberId);
+                window.appUI.selectedMemberId = memberId;
+                const memberTasks = d.tasks.filter(t => t.memberId === memberId);
+                const profileMonth = `${window.appUI.curDate.getFullYear()}-${String(window.appUI.curDate.getMonth() + 1).padStart(2, '0')}`;
+                const profileBase = member ? window.baseService.getForMonth(member, profileMonth) : 0;
+                const profileFinance = member ? window.financeService.calculateMonth(member, d.tasks, profileMonth, profileBase, [...defaultTypes, ...(d.types || [])], utils.isWardrobeBonusEnabled(member)) : null;
+                const waterTotal = Object.values(d.water || {}).reduce((total, day) => total + Number(window.appDB.normalizeWaterMap(day)[memberId] || 0), 0);
+                const memberHistory = (d.history || []).filter(item => String(item.memberId) === String(memberId)).slice(0, 8);
+                const scheduleDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                const rank = window.familyServices.gamification.memberRank(memberId, d);
+                const details = member ? `
+                    <div class="bg-bgCard border border-blueGrey/30 rounded-2xl p-4">
+                        <div class="flex items-center gap-3 mb-4">
+                            <button onclick="window.appUI.showMemberTasks(${member.id})" class="rounded-full focus:outline-none focus:ring-2 focus:ring-mainRed" title="Atualizar perfil de ${member.name}"><img src="${member.photo || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (member.avatar || member.name || 'user') + '&backgroundColor=15171A'}" class="w-14 h-14 rounded-full object-cover border border-blueGrey" alt="Foto de ${member.name}"></button>
+                            <div>
+                                <h3 class="text-xl font-bold">${member.name}</h3>
+                                <p class="text-xs text-gray-400">${utils.getAgeCat(member.age)} • ${member.age || 'Idade não informada'} anos • Base fixa: R$ ${profileBase.toFixed(2).replace('.', ',')}</p>
+                                <p class="text-xs text-success">Base + bônus de ${new Date(`${profileMonth}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long' })}: R$ ${profileFinance.baseWithBonuses.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3 mb-4">
+                                <div class="flex-1">
+                                <div class="flex justify-between items-center gap-3">
+                                    <div>
+                                        <p class="text-[10px] text-gray-400 uppercase">Nível atual</p>
+                                        <p class="font-bold text-lg text-yellow-300">${rank.current.title}</p>
+                                        <p class="text-[10px] text-gray-400">${rank.current.bird}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-[10px] text-gray-400">Pontos</p>
+                                        <p class="font-bold text-white">${rank.points}</p>
+                                    </div>
+                                </div>
+                                ${rank.next ? `<div class="mt-3"><div class="flex justify-between text-[10px] text-gray-400"><span>Meta para ${rank.next.title}</span><span>${rank.pointsToNext} pts</span></div><div class="h-2 bg-bgCard rounded-full overflow-hidden mt-1"><div class="h-full bg-yellow-400" style="width:${rank.progress}%"></div></div></div>` : '<p class="text-[10px] text-success mt-2">Nível máximo alcançado.</p>'}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 text-xs">
+                            <div class="bg-bgMain rounded-lg p-3"><span class="text-gray-500 block">Meta de água</span><strong>${Number(member.waterGoal || 0) ? `${Number(member.waterGoal).toLocaleString('pt-BR')} ml` : 'Sem meta'}</strong></div>
+                            <div class="bg-bgMain rounded-lg p-3"><span class="text-gray-500 block">Consumo acumulado</span><strong>${waterTotal.toLocaleString('pt-BR')} ml</strong></div>
+                            <div class="bg-bgMain rounded-lg p-3"><span class="text-gray-500 block">Guarda-roupa</span><strong>${utils.isWardrobeBonusEnabled(member) ? 'Incluído no total mensal' : 'Fora do total mensal'}</strong></div>
+                            <div class="bg-bgMain rounded-lg p-3"><span class="text-gray-500 block">Tarefas</span><strong>${memberTasks.length}</strong></div>
+                        </div>
+                        <div class="space-y-3">
+                            ${memberTasks.length ? memberTasks.map(task => {
+                                const type = [...defaultTypes, ...(d.types || [])].find(x => x.id === task.type) || defaultTypes[0];
+                                const status = task.status && task.status[utils.getDateKey(window.appUI.curDate)] ? task.status[utils.getDateKey(window.appUI.curDate)] : 'pending';
+                                const statusText = status === 'done' ? 'Concluída' : status === 'failed' ? 'Falhou' : 'Pendente';
+                                const schedule = `${task.mode === 'single' ? `Única em ${new Date(`${task.date}T12:00:00`).toLocaleDateString('pt-BR')}` : (task.days || []).map(day => scheduleDays[day]).join(', ') || 'Sem dias definidos'}${task.time ? ` • ${task.time}` : ''}`;
+                                return `<div class="bg-bgMain border border-blueGrey/30 rounded-xl p-3">
+                                    <div class="flex justify-between items-start gap-3">
+                                        <div class="flex items-center gap-2">
+                                            ${window.appUI.getTaskBadgeHtml(task)}
+                                            <div>
+                                            <p class="font-bold">${task.title}</p>
+                                            <p class="text-[10px] px-2 py-0.5 mt-1 rounded-full inline-block" style="color:${type.color}; border:1px solid ${type.color}">${type.label}</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] ${status === 'done' ? 'text-success' : status === 'failed' ? 'text-mainRed' : 'text-gray-400'}">${statusText}</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-2">Responsável: ${member.name} • ${schedule}</p>
+                                </div>`;
+                            }).join('') : '<p class="text-gray-500 text-sm">Nenhuma tarefa atribuída para este integrante.</p>'}
+                        </div>
+                        ${memberHistory.length ? `<div class="mt-5 border-t border-blueGrey/30 pt-4"><h4 class="text-sm font-bold mb-2">Atividade recente</h4><div class="space-y-1">${memberHistory.map(item => `<p class="text-xs text-gray-400"><span class="text-gray-200">${item.label}</span> • ${new Date(`${item.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>`).join('')}</div></div>` : ''}
+                    </div>
+                ` : '<p class="text-gray-500">Selecione um perfil.</p>';
+                document.getElementById('member-details').innerHTML = details;
+            },
+            openTaskModal: (id) => {
+                let d = window.appDB.data; if(!d.members.length) return alert("Cadastre alguém primeiro.");
+                document.getElementById('mod-task-memberid').innerHTML = d.members.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+                document.getElementById('mod-task-rotation-members-select').innerHTML = d.members.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
+                document.getElementById('mod-task-type').innerHTML = [...defaultTypes, ...d.types].map(x=>`<option value="${x.id}">${x.label}</option>`).join('');
+                document.querySelectorAll('.mod-task-day-cb').forEach(c=>c.checked=false);
+                let t = d.tasks.find(x=>x.id===id) || {id:'',memberId:'',title:'',type:'',penalty:'',days:[],date:'',time:'',mode:'recurring',isWardrobe:false,difficulty:'bronze',points:10,requiresProof:false};
+                document.getElementById('mod-task-id').value=t.id; if(t.id)document.getElementById('mod-task-memberid').value=t.memberId; document.getElementById('mod-task-title').value=t.title; if(t.id)document.getElementById('mod-task-type').value=t.type; document.getElementById('mod-task-penalty').value=t.penalty; document.getElementById('mod-task-time').value=t.time || '';
+                const difficultyInput = document.getElementById('mod-task-difficulty');
+                const pointsInput = document.getElementById('mod-task-points');
+                const proofInput = document.getElementById('mod-task-proof');
+                if (difficultyInput) difficultyInput.value = t.difficulty || 'bronze';
+                if (pointsInput) pointsInput.value = t.points || ({ bronze: 10, silver: 25, gold: 50, diamond: 100 }[t.difficulty || 'bronze'] || 10);
+                if (proofInput) proofInput.checked = Boolean(t.requiresProof);
+                const rotationMembers = t.rotation?.memberIds || [];
+                document.getElementById('mod-task-rotation').checked = Boolean(t.rotation?.enabled);
+                Array.from(document.getElementById('mod-task-rotation-members-select').options).forEach(option => { option.selected = rotationMembers.map(String).includes(String(option.value)); });
+                document.getElementById('mod-task-rotation-members').classList.toggle('hidden', !t.rotation?.enabled);
+                document.getElementById('mod-task-wardrobe').checked=Boolean(t.isWardrobe || utils.isWardrobeTask(t));
+                t.days.forEach(dy=>{ document.querySelector(`.mod-task-day-cb[value="${dy}"]`).checked=true; });
+                document.querySelector(`input[name="task-mode"][value="${t.mode || 'recurring'}"]`).checked=true; document.getElementById('mod-task-date').value=t.date || ''; window.appUI.toggleTaskMode();
+                document.getElementById('delete-task-modal-button').classList.toggle('hidden', !t.id); document.getElementById('modal-overlay').classList.replace('hidden','flex'); document.getElementById('modal-task').classList.remove('hidden');
+            },
+            openTaskTypeModal: () => {
+                let n = prompt("Nome da nova categoria:"); if(!n) return;
+                let d = window.appDB.data; d.types.push({id:'c_'+Date.now(), label:n, rule:'neutral', color:'#6D28D9'}); window.appDB.save(d);
+            },
+            selectBonusTaskTemplate: (id) => {
+                const option = window.appDB.data.bonusTaskOptions.find(item => String(item.id) === String(id));
+                if (!option) {
+                    document.getElementById('bonus-task-title').value = '';
+                    document.getElementById('bonus-task-value').value = '';
+                    return;
+                }
+                document.getElementById('bonus-task-title').value = option.title;
+                document.getElementById('bonus-task-value').value = Number(option.value);
+            },
+            setDate: (k) => { window.appUI.curDate = new Date(k+"T12:00:00"); window.app.render(); },
+            updateTaskExplorerRange: () => window.appUI.renderTaskExplorer(),
+            scheduleTaskExplorerRender: () => {
+                clearTimeout(window.appUI.taskExplorerTimer);
+                window.appUI.taskExplorerTimer = setTimeout(() => window.appUI.renderTaskExplorer(), 120);
+            },
+            resetTaskExplorerFilters: () => {
+                document.getElementById('task-range-filter').value = 'day';
+                document.getElementById('task-member-filter').value = 'all';
+                document.getElementById('task-type-filter').value = 'all';
+                document.getElementById('task-status-filter').value = 'all';
+                document.getElementById('task-search-filter').value = '';
+                window.appUI.renderTaskExplorer();
+            },
+            setTaskExplorerCustomRange: () => {
+                document.getElementById('task-range-filter').value = 'custom';
+                window.appUI.renderTaskExplorer();
+            },
+            renderTaskExplorer: () => {
+                const list = document.getElementById('task-explorer-list');
+                if (!list || !window.familyServices.taskQuery) return;
+                const selectedDate = window.appUI.curDate;
+                const dateKey = date => utils.getDateKey(date);
+                const mode = document.getElementById('task-range-filter').value || 'day';
+                let fromDate = new Date(selectedDate);
+                let toDate = new Date(selectedDate);
+                if (mode === 'previous7') {
+                    fromDate.setDate(fromDate.getDate() - 6);
+                } else if (mode === 'next7') {
+                    toDate.setDate(toDate.getDate() + 6);
+                } else if (mode === 'month') {
+                    fromDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1, 12);
+                    toDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 12);
+                } else if (mode === 'year') {
+                    fromDate = new Date(selectedDate.getFullYear(), 0, 1, 12);
+                    toDate = new Date(selectedDate.getFullYear(), 11, 31, 12);
+                } else if (mode === 'custom') {
+                    const fromValue = document.getElementById('task-date-from').value;
+                    const toValue = document.getElementById('task-date-to').value;
+                    fromDate = fromValue ? new Date(`${fromValue}T12:00:00`) : null;
+                    toDate = toValue ? new Date(`${toValue}T12:00:00`) : null;
+                }
+
+                const customDateLabels = document.querySelectorAll('.task-custom-date');
+                customDateLabels.forEach(label => label.classList.toggle('hidden', mode !== 'custom'));
+                if (mode !== 'custom') {
+                    document.getElementById('task-date-from').value = dateKey(fromDate);
+                    document.getElementById('task-date-to').value = dateKey(toDate);
+                }
+
+                const count = document.getElementById('task-explorer-count');
+                if (!fromDate || !toDate) {
+                    count.textContent = 'Escolha as datas para analisar';
+                    list.innerHTML = '<p class="text-sm text-gray-400">Selecione a data inicial e final para carregar as tarefas do período.</p>';
+                    return;
+                }
+
+                const formatDate = date => date.toLocaleDateString('pt-BR');
+                const filters = {
+                    from: dateKey(fromDate),
+                    to: dateKey(toDate),
+                    memberId: document.getElementById('task-member-filter').value,
+                    typeId: document.getElementById('task-type-filter').value,
+                    status: document.getElementById('task-status-filter').value,
+                    query: document.getElementById('task-search-filter').value
+                };
+                let occurrences;
+                try {
+                    occurrences = window.familyServices.taskQuery.listOccurrences(window.appDB.data.tasks, filters);
+                } catch (error) {
+                    count.textContent = 'Período inválido';
+                    list.innerHTML = `<p class="text-sm text-mainRed">${error.message}</p>`;
+                    return;
+                }
+
+                const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[character]);
+                const members = new Map(window.appDB.data.members.map(member => [String(member.id), member]));
+                const types = new Map([...defaultTypes, ...(window.appDB.data.types || [])].map(type => [String(type.id), type]));
+                const completedCount = occurrences.filter(item => item.status === 'done' || item.status === 'approved').length;
+                const statusLabels = {
+                    pending: 'Pendente',
+                    awaiting_approval: 'Aguardando aprovação',
+                    done: 'Concluída',
+                    approved: 'Aprovada',
+                    failed: 'Não concluída'
+                };
+                const statusClasses = {
+                    pending: 'text-yellow-300 border-yellow-300/30',
+                    awaiting_approval: 'text-blue-300 border-blue-300/30',
+                    done: 'text-success border-success/30',
+                    approved: 'text-success border-success/30',
+                    failed: 'text-mainRed border-mainRed/30'
+                };
+                count.textContent = `${occurrences.length} ${occurrences.length === 1 ? 'ocorrência' : 'ocorrências'} • ${formatDate(fromDate)}${filters.from === filters.to ? '' : ` a ${formatDate(toDate)}`} • ${completedCount} concluída(s)`;
+
+                if (!list.dataset.listenerAttached) {
+                    list.addEventListener('click', event => {
+                        const button = event.target.closest('[data-task-action]');
+                        if (!button) return;
+                        const id = button.dataset.taskId;
+                        const taskDate = button.dataset.taskDate;
+                        const action = button.dataset.taskAction;
+                        if (action === 'edit') return window.appUI.openTaskModal(id);
+                        if (action === 'delete') return window.appDB.deleteTask(id);
+                        if (action === 'reopen') return window.appDB.updateTask(id, taskDate, 'pending');
+                        if (action === 'done' || action === 'failed') return window.appDB.updateTask(id, taskDate, action);
+                    });
+                    list.dataset.listenerAttached = 'true';
+                }
+
+                list.innerHTML = occurrences.length ? occurrences.map(({ task, date, status }) => {
+                    const member = members.get(String(task.memberId));
+                    const type = types.get(String(task.type)) || defaultTypes[0];
+                    const statusClass = statusClasses[status] || statusClasses.pending;
+                    const taskId = escapeHtml(task.id);
+                    const safeDate = escapeHtml(date);
+                    const actions = status === 'done'
+                        ? `<button type="button" data-task-action="reopen" data-task-id="${taskId}" data-task-date="${safeDate}" class="px-3 py-2 rounded-lg bg-bgMain border border-blueGrey/50 text-gray-300 text-xs font-bold">Reabrir</button>`
+                        : status === 'approved' || status === 'awaiting_approval'
+                            ? ''
+                            : `<button type="button" data-task-action="done" data-task-id="${taskId}" data-task-date="${safeDate}" class="px-3 py-2 rounded-lg bg-success/10 border border-success/40 text-success text-xs font-bold"><i class="fas fa-check mr-1"></i>Concluir</button><button type="button" data-task-action="failed" data-task-id="${taskId}" data-task-date="${safeDate}" class="px-3 py-2 rounded-lg bg-mainRed/10 border border-mainRed/40 text-mainRed text-xs font-bold">Não concluída</button>`;
+                    return `<article class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 rounded-xl border border-blueGrey/30 bg-bgMain p-3">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="font-semibold break-words">${escapeHtml(task.title)}</h4>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full border ${statusClass}">${statusLabels[status] || 'Pendente'}</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full border border-blueGrey/40 text-gray-300">${escapeHtml(type.label)}</span>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">${escapeHtml(formatDate(new Date(`${date}T12:00:00`)))}${task.time ? ` • ${escapeHtml(task.time)}` : ''} • ${escapeHtml(member?.name || 'Sem integrante')}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 shrink-0">
+                            ${actions}
+                            <button type="button" data-task-action="edit" data-task-id="${taskId}" class="px-3 py-2 rounded-lg bg-bgCard border border-blueGrey/50 text-blue-300 text-xs font-bold" aria-label="Editar ${escapeHtml(task.title)}"><i class="fas fa-pen"></i></button>
+                            <button type="button" data-task-action="delete" data-task-id="${taskId}" class="px-3 py-2 rounded-lg bg-bgCard border border-mainRed/30 text-mainRed text-xs font-bold" aria-label="Excluir ${escapeHtml(task.title)}"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </article>`;
+                }).join('') : '<div class="rounded-xl border border-dashed border-blueGrey/40 p-6 text-center"><p class="font-semibold text-gray-300">Nenhuma tarefa encontrada</p><p class="text-xs text-gray-500 mt-1">Tente ampliar o período ou remover algum filtro.</p></div>';
+            },
+            toggleTaskMode: () => { const single = document.querySelector('input[name="task-mode"]:checked')?.value === 'single'; document.getElementById('recurring-days').classList.toggle('hidden', single); document.getElementById('mod-task-date').classList.toggle('hidden', !single); },
+            enableNotifications: async () => { if (!('Notification' in window)) return alert('Este navegador não suporta notificações.'); const permission = await Notification.requestPermission(); if (permission === 'granted') window.appDB.notify('Notificações ativadas', 'Você receberá avisos sobre hidratação e tarefas.'); },
+            renderFinanceSummary: () => {
+                const financeMonth = document.getElementById('finance-month');
+                if (!financeMonth) return;
+                const selectedMonth = financeMonth.value || `${window.appUI.curDate.getFullYear()}-${String(window.appUI.curDate.getMonth()+1).padStart(2,'0')}`;
+                if (!financeMonth.value) financeMonth.value = selectedMonth;
+                const d = window.appDB.data;
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const monthDate = new Date(year, month - 1, 1, 12);
+                const monthKey = `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}`;
+                let finHtml = '';
+                const types = [...defaultTypes, ...(d.types || [])];
+                d.members.map(member => {
+                    const baseValue = window.baseService.getForMonth(member, monthKey);
+                    const finance = window.financeService.calculateMonth(member, d.tasks, monthKey, baseValue, types, utils.isWardrobeBonusEnabled(member));
+                    return { member, baseValue, finance };
+                }).filter(({ member, baseValue, finance }) =>
+                    baseValue > 0 ||
+                    utils.isWardrobeBonusEnabled(member) ||
+                    ['Criança', 'Adolescente'].includes(utils.getAgeCat(member.age)) ||
+                    finance.taskBonus > 0 ||
+                    finance.wardrobeAmount !== 0
+                ).forEach(({ member, baseValue, finance }) => {
+                    const wardrobeLabel = finance.wardrobeAmount > 0 ? 'Guarda-roupa organizado' : finance.wardrobeAmount < 0 ? 'Guarda-roupa não organizado' : finance.hasWardrobeTasks && utils.isWardrobeBonusEnabled(member) ? 'Guarda-roupa pendente' : '';
+                    const wardrobeHtml = wardrobeLabel ? `<p class="text-[10px] ${finance.wardrobeAmount < 0 ? 'text-mainRed' : 'text-success'}">${finance.wardrobeAmount > 0 ? '+R$ 1,00 - ' : finance.wardrobeAmount < 0 ? '-R$ 1,00 - ' : ''}${wardrobeLabel}</p>` : '';
+                    finHtml += `<div class="bg-bgCard p-4 rounded-xl border border-blueGrey/30 flex justify-between items-center"><div><p class="font-bold">${member.name}</p><p class="text-[10px] text-gray-400">Base + bônus: R$ ${finance.baseWithBonuses.toFixed(2).replace('.',',')}</p><p class="text-[10px] text-success">Bônus de tarefas incluídos: +R$ ${finance.taskBonus.toFixed(2).replace('.',',')}</p>${wardrobeHtml}</div><div class="text-right text-xs"><p class="text-mainRed">Descontos: -R$ ${finance.failures.toFixed(2).replace('.',',')}</p><p class="font-bold text-lg mt-1">Total: R$ ${finance.total.toFixed(2).replace('.',',')}</p></div></div>`;
+                });
+                document.getElementById('finance-summary').innerHTML = finHtml;
+            },
+            renderHistory: () => {
+                const d = window.appDB.data; const period = document.getElementById('history-period')?.value || 'week'; const filter = document.getElementById('history-filter')?.value || 'all'; const member = document.getElementById('history-member')?.value || 'all'; const end = new Date(window.appUI.curDate); end.setHours(23, 59, 59, 999); const start = new Date(end);
+                if (period === 'day') start.setHours(0, 0, 0, 0); if (period === 'week') start.setDate(end.getDate() - 6); if (period === 'month') start.setDate(1); if (period === 'year') { start.setMonth(0, 1); start.setHours(0, 0, 0, 0); }
+                const events = (d.history || []).filter(item => { const date = new Date(`${item.date}T12:00:00`); return date >= start && date <= end && (filter === 'all' || item.kind === filter) && (member === 'all' || String(item.memberId) === String(member)); }).slice(0, 100);
+                document.getElementById('history-list').innerHTML = events.length ? events.map(item => { const m = d.members.find(x => String(x.id) === String(item.memberId)); const colors = { water: 'text-blue-300', task: 'text-success', finance: Number(item.value) < 0 ? 'text-mainRed' : 'text-success', member: 'text-yellow-300' }; return `<div class="flex items-center justify-between gap-3 bg-bgMain border border-blueGrey/30 rounded-lg p-3"><div><p class="text-sm ${colors[item.kind] || 'text-gray-300'}">${item.label}</p><p class="text-[10px] text-gray-500">${new Date(`${item.date}T12:00:00`).toLocaleDateString('pt-BR')} ${m ? `• ${m.name}` : ''}</p></div><span class="text-[10px] uppercase text-gray-500">${item.kind}</span></div>`; }).join('') : '<p class="text-sm text-gray-500">Nenhum evento encontrado neste período.</p>';
+                window.appUI.renderBaseReport();
+            },
+            renderBaseReport: () => {
+                const d = window.appDB.data;
+                const monthInput = document.getElementById('base-report-month');
+                const memberSelect = document.getElementById('base-report-member');
+                const reportList = document.getElementById('base-report-list');
+                if (!monthInput || !memberSelect || !reportList) return;
+
+                if (!monthInput.value) {
+                    const date = window.appUI.curDate;
+                    monthInput.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }
+                const selectedMember = memberSelect.value || 'all';
+                memberSelect.innerHTML = `<option value="all">Todos os integrantes</option>${d.members.map(member => `<option value="${member.id}">${member.name}</option>`).join('')}`;
+                memberSelect.value = d.members.some(member => String(member.id) === String(selectedMember)) ? selectedMember : 'all';
+
+                const [year, month] = monthInput.value.split('-').map(Number);
+                if (!year || !month) {
+                    reportList.innerHTML = '<p class="py-3 text-sm text-gray-500">Selecione um mês para gerar o extrato.</p>';
+                    return;
+                }
+                const selectedMonth = `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}`;
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const monthName = new Date(year, month - 1, 1, 12).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                const members = d.members.filter(member => memberSelect.value === 'all' || String(member.id) === String(memberSelect.value));
+                const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+                reportList.innerHTML = members.length ? members.map(member => {
+                    const occurrences = d.tasks
+                        .filter(task => String(task.memberId) === String(member.id))
+                        .flatMap(task => {
+                            const dates = [];
+                            if (task.mode === 'single') {
+                                if (task.date && task.date.startsWith(monthInput.value)) dates.push(task.date);
+                            } else {
+                                for (let day = 1; day <= daysInMonth; day++) {
+                                    const date = new Date(year, month - 1, day, 12);
+                                    if (Array.isArray(task.days) && task.days.includes(date.getDay())) dates.push(utils.getDateKey(date));
+                                }
+                            }
+                            return dates.map(date => ({ task, date, status: task.status?.[date] || 'pending' }));
+                        })
+                        .sort((first, second) => first.date.localeCompare(second.date) || first.task.title.localeCompare(second.task.title, 'pt-BR'));
+                    const completed = occurrences.filter(item => ['done', 'approved'].includes(item.status)).length;
+                    const failed = occurrences.filter(item => item.status === 'failed').length;
+                    const pending = occurrences.length - completed - failed;
+                    const wardrobeWeeks = new Map();
+                    occurrences.filter(item => utils.isWardrobeTask(item.task)).forEach(item => {
+                        const date = new Date(`${item.date}T12:00:00`);
+                        date.setDate(date.getDate() - date.getDay());
+                        const weekKey = utils.getDateKey(date);
+                        if (!wardrobeWeeks.has(weekKey)) wardrobeWeeks.set(weekKey, []);
+                        wardrobeWeeks.get(weekKey).push(item);
+                    });
+                    const wardrobeReport = wardrobeWeeks.size ? Array.from(wardrobeWeeks.entries()).map(([weekKey, items]) => {
+                        const allDone = items.every(item => ['done', 'approved'].includes(item.status));
+                        const hasFailure = items.some(item => item.status === 'failed');
+                        const label = allDone ? 'Organizado' : hasFailure ? 'Não organizado' : 'Pendente';
+                        const color = allDone ? 'text-success' : hasFailure ? 'text-mainRed' : 'text-yellow-300';
+                        const weekDate = new Date(`${weekKey}T12:00:00`).toLocaleDateString('pt-BR');
+                        return `<p class="text-xs ${color}">Semana de ${weekDate}: ${label}</p>`;
+                    }).join('') : '<p class="text-xs text-gray-500">Sem tarefas de guarda-roupa neste mês.</p>';
+                    const taskRows = occurrences.length ? occurrences.map(item => {
+                        const statusText = ['done', 'approved'].includes(item.status) ? 'Concluída' : item.status === 'failed' ? 'Não concluída' : 'Pendente';
+                        const statusColor = ['done', 'approved'].includes(item.status) ? 'text-success' : item.status === 'failed' ? 'text-mainRed' : 'text-yellow-300';
+                        const dateLabel = new Date(`${item.date}T12:00:00`).toLocaleDateString('pt-BR');
+                        const taskKind = utils.isWardrobeTask(item.task) ? ' • guarda-roupa' : '';
+                        return `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-2 border-t border-blueGrey/20"><p class="text-sm text-gray-200">${dateLabel} • ${item.task.time ? `${item.task.time} • ` : ''}${item.task.title}<span class="text-[10px] text-gray-400">${taskKind}</span></p><span class="text-xs ${statusColor}">${statusText}</span></div>`;
+                    }).join('') : '<p class="py-2 text-sm text-gray-500">Nenhuma tarefa prevista neste mês.</p>';
+
+                    const baseValue = window.baseService.getForMonth(member, selectedMonth);
+                    const finance = window.financeService.calculateMonth(member, d.tasks, selectedMonth, baseValue, [...defaultTypes, ...(d.types || [])], utils.isWardrobeBonusEnabled(member));
+                    return `<section class="py-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div><h4 class="font-bold">${member.name}</h4><p class="text-xs text-gray-400">Base + bônus • ${monthName}</p><p class="text-[10px] text-success">Bônus de tarefas incluídos: +${money(finance.taskBonus)}${finance.wardrobeAmount > 0 ? ` • Guarda-roupa: +${money(finance.wardrobeAmount)}` : ''}</p></div>
+                            <p class="text-lg font-bold text-white">${money(finance.baseWithBonuses)}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs"><span class="text-success">Concluídas: ${completed}</span><span class="text-mainRed">Não concluídas: ${failed}</span><span class="text-yellow-300">Pendentes: ${pending}</span></div>
+                        <div class="mt-3"><p class="text-xs font-bold text-gray-300 mb-1">Guarda-roupa</p><div class="space-y-1">${wardrobeReport}</div></div>
+                        <div class="mt-3"><p class="text-xs font-bold text-gray-300 mb-1">Tarefas do mês</p>${taskRows}</div>
+                    </section>`;
+                }).join('') : '<p class="py-3 text-sm text-gray-500">Nenhum integrante encontrado.</p>';
+            },
+            printBaseReport: () => window.print(),
+            renderChildView: () => {
+                const d = window.appDB.data;
+                const children = d.members.filter(member => Number(member.age) < 18);
+                const child = children.find(item => String(item.id) === String(window.appUI.selectedMemberId)) || children[0] || d.members[0];
+                if (child && !window.appUI.selectedMemberId) window.appUI.selectedMemberId = child.id;
+                const wallet = child ? window.familyServices.wallet.ensure(child.id, d) : null;
+                const goals = child ? (d.goals || []).filter(goal => String(goal.childId) === String(child.id)) : [];
+                const rewards = (d.rewards || []).filter(reward => reward.active);
+                const tasks = child ? d.tasks.filter(task => String(task.memberId) === String(child.id)) : [];
+                const rank = child ? window.familyServices.gamification.memberRank(child.id, d) : null;
+
+                document.getElementById('child-wallet-summary').innerHTML = child && wallet ? `
+                    <div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1">
+                                <p class="text-2xl font-bold text-yellow-300">${wallet.points} pts</p>
+                                <p class="text-xs text-gray-400">Saldo em dinheiro: R$ ${Number(wallet.money).toFixed(2).replace('.', ',')}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3 mt-3">
+                        <div class="flex justify-between items-center gap-3">
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase">Nível</p>
+                                <p class="font-bold text-lg text-yellow-300">${rank.current.title}</p>
+                                <p class="text-[10px] text-gray-400">${rank.current.bird}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] text-gray-400">Próximo nível</p>
+                                <p class="font-bold text-white">${rank.next ? `${rank.pointsToNext} pts` : 'Máximo'}</p>
+                            </div>
+                        </div>
+                        ${rank.next ? `<div class="mt-2 h-2 bg-bgCard rounded-full overflow-hidden"><div class="h-full bg-yellow-400" style="width:${rank.progress}%"></div></div>` : '<p class="text-[10px] text-success mt-2">Nível máximo alcançado.</p>'}
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 mt-2">
+                        <div class="bg-bgMain rounded-lg p-2">Gastar<br><strong class="text-white">R$ ${Number(wallet.buckets.spend || 0).toFixed(2).replace('.', ',')}</strong></div>
+                        <div class="bg-bgMain rounded-lg p-2">Guardar<br><strong class="text-white">R$ ${Number(wallet.buckets.save || 0).toFixed(2).replace('.', ',')}</strong></div>
+                        <div class="bg-bgMain rounded-lg p-2">Ajudar<br><strong class="text-white">R$ ${Number(wallet.buckets.help || 0).toFixed(2).replace('.', ',')}</strong></div>
+                    </div>
+                ` : '<p class="text-sm text-gray-500">Cadastre uma criança para ver o cofrinho.</p>';
+
+                document.getElementById('child-goals-summary').innerHTML = child && goals.length ? goals.map(goal => {
+                    const progress = Math.min(100, Math.round((Number(goal.accumulatedAmount || 0) / Number(goal.targetAmount || 1)) * 100));
+                    return `<div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3"><div class="flex justify-between text-xs"><span>${goal.title}</span><span>${progress}%</span></div><div class="h-2 bg-bgCard rounded-full overflow-hidden mt-2"><div class="h-full bg-pink-400" style="width:${progress}%"></div></div><p class="text-[10px] text-gray-400 mt-2">R$ ${Number(goal.accumulatedAmount || 0).toFixed(2).replace('.', ',')} / R$ ${Number(goal.targetAmount || 0).toFixed(2).replace('.', ',')}</p></div>`;
+                }).join('') : '<p class="text-sm text-gray-500">Sem metas ativas.</p>';
+
+                document.getElementById('child-rewards-summary').innerHTML = rewards.length ? rewards.map(reward => `
+                    <div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3 flex items-center justify-between gap-3">
+                        <div>
+                            <p class="font-bold text-sm">${reward.title}</p>
+                            <p class="text-[10px] text-yellow-300">${reward.pointsCost} pontos</p>
+                        </div>
+                        <button onclick="window.appDB.purchaseReward('${reward.id}')" class="px-3 py-1.5 bg-yellow-300 text-black rounded-lg text-xs font-bold">Comprar</button>
+                    </div>
+                `).join('') : '<p class="text-sm text-gray-500">Nenhum prêmio disponível.</p>';
+
+                document.getElementById('child-tasks-summary').innerHTML = tasks.length ? tasks.slice(0, 6).map(task => {
+                    const status = task.status && task.status[utils.getDateKey(window.appUI.curDate)] ? task.status[utils.getDateKey(window.appUI.curDate)] : 'pending';
+                    const label = status === 'approved' ? 'Aprovada' : status === 'awaiting_approval' ? 'À revisão' : status === 'done' ? 'Concluída' : 'Pendente';
+                    return `<div class="rounded-xl border border-blueGrey/30 bg-bgMain p-3 flex items-center gap-2">${window.appUI.getTaskBadgeHtml(task)}<div><div class="flex justify-between gap-2"><p class="font-bold text-sm">${task.title}</p><span class="text-[10px] text-gray-300">${label}</span></div>${task.time ? `<p class="text-[10px] text-gray-400 mt-1">${task.time}</p>` : ''}<p class="text-[10px] text-yellow-300 mt-1">1 ponto por conclusão</p></div></div>`;
+                }).join('') : '<p class="text-sm text-gray-500">Nenhuma tarefa atribuída.</p>';
+            },
+            
+            updateChart: () => {
+                const d = window.appDB.data;
+                const canvas = document.getElementById('taskChart');
+                if (!canvas || !window.familyServices.taskQuery) return;
+                const memberSelect = document.getElementById('chart-member-filter');
+                const selectedMemberId = memberSelect ? memberSelect.value : 'all';
+                const members = selectedMemberId === 'all'
+                    ? d.members
+                    : d.members.filter(member => String(member.id) === String(selectedMemberId));
+                const selectedDate = window.appUI.curDate;
+                const period = document.getElementById('chart-period')?.value || 'weekly';
+                const fromDate = period === 'monthly'
+                    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1, 12)
+                    : new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - selectedDate.getDay(), 12);
+                const toDate = period === 'monthly'
+                    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 12)
+                    : new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate() + 6, 12);
+                const dateKey = date => utils.getDateKey(date);
+                const range = window.familyServices.taskQuery.listOccurrences(d.tasks, {
+                    from: dateKey(fromDate),
+                    to: dateKey(toDate),
+                    memberId: selectedMemberId
+                });
+                const counts = new Map(members.map(member => [String(member.id), { done: 0, failed: 0 }]));
+                range.forEach(({ task, status }) => {
+                    const count = counts.get(String(task.memberId));
+                    if (!count) return;
+                    if (status === 'done' || status === 'approved') count.done += 1;
+                    if (status === 'failed') count.failed += 1;
+                });
+                const labels = members.map(member => member.name);
+                const done = members.map(member => counts.get(String(member.id)).done);
+                const failed = members.map(member => counts.get(String(member.id)).failed);
+                const lightTheme = document.documentElement.classList.contains('light-mode');
+                const chartTextColor = lightTheme ? '#1d2a30' : '#fff';
+                const chartGridColor = lightTheme ? '#d3dfe3' : '#6D28D9';
+                const chartData = {
+                    labels,
+                    datasets: [
+                        { label: 'Concluídas', data: done, backgroundColor: '#A855F7' },
+                        { label: 'Não concluídas', data: failed, backgroundColor: '#E11D48' }
+                    ]
+                };
+                if (window.appUI.chartIns) {
+                    window.appUI.chartIns.data = chartData;
+                    window.appUI.chartIns.options.scales.y.grid.color = chartGridColor;
+                    window.appUI.chartIns.options.scales.y.ticks.color = chartTextColor;
+                    window.appUI.chartIns.options.scales.x.ticks.color = chartTextColor;
+                    window.appUI.chartIns.options.plugins.legend.labels.color = chartTextColor;
+                    window.appUI.chartIns.update('none');
+                    return;
+                }
+                window.appUI.chartIns = new Chart(canvas, {
+                    type: 'bar',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: chartGridColor }, ticks: { color: chartTextColor } },
+                            x: { grid: { display: false }, ticks: { color: chartTextColor } }
+                        },
+                        plugins: { legend: { labels: { color: chartTextColor } } }
+                    }
+                });
+            }
+        };
+
+        window.app = {
+            render: () => {
+                let d = window.appDB.data; let curKey = utils.getDateKey(window.appUI.curDate);
+                const bonusMemberSelect = document.getElementById('bonus-task-member');
+                if (bonusMemberSelect) {
+                    const selectedBonusMemberId = bonusMemberSelect.value || String(window.appUI.selectedMemberId || '');
+                    bonusMemberSelect.innerHTML = d.members.map(member => `<option value="${member.id}">${String(member.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</option>`).join('');
+                    if (d.members.some(member => String(member.id) === selectedBonusMemberId)) bonusMemberSelect.value = selectedBonusMemberId;
+                }
+                const bonusTemplateSelect = document.getElementById('bonus-task-template');
+                if (bonusTemplateSelect) {
+                    const selectedTemplateId = bonusTemplateSelect.value;
+                    bonusTemplateSelect.innerHTML = '<option value="">Digitar nova tarefa</option>' + d.bonusTaskOptions.map(option => `<option value="${option.id}">${String(option.title).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')} • R$ ${Number(option.value).toFixed(2).replace('.', ',')}</option>`).join('');
+                    if (d.bonusTaskOptions.some(option => String(option.id) === selectedTemplateId)) bonusTemplateSelect.value = selectedTemplateId;
+                }
+                const memberSelect = document.getElementById('chart-member-filter');
+                if (memberSelect) {
+                    memberSelect.innerHTML = '<option value="all">Todos</option>' + d.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+                    if (!memberSelect.value || !d.members.some(m => String(m.id) === String(memberSelect.value))) {
+                        memberSelect.value = 'all';
+                    }
+                }
+                const historyMember = document.getElementById('history-member');
+                if (historyMember) { const selectedHistoryMember = historyMember.value; historyMember.innerHTML = '<option value="all">Todos</option>' + d.members.map(m => `<option value="${m.id}">${m.name}</option>`).join(''); historyMember.value = d.members.some(m => String(m.id) === String(selectedHistoryMember)) ? selectedHistoryMember : 'all'; }
+                const escapeOption = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[character]);
+                const taskMemberFilter = document.getElementById('task-member-filter');
+                if (taskMemberFilter) {
+                    const selectedId = taskMemberFilter.value || 'all';
+                    taskMemberFilter.innerHTML = '<option value="all">Todos</option>' + d.members.map(member => `<option value="${escapeOption(member.id)}">${escapeOption(member.name)}</option>`).join('');
+                    taskMemberFilter.value = d.members.some(member => String(member.id) === selectedId) ? selectedId : 'all';
+                }
+                const taskTypeFilter = document.getElementById('task-type-filter');
+                if (taskTypeFilter) {
+                    const selectedTypeId = taskTypeFilter.value || 'all';
+                    taskTypeFilter.innerHTML = '<option value="all">Todas</option>' + [...defaultTypes, ...(d.types || [])]
+                        .map(type => `<option value="${escapeOption(type.id)}">${escapeOption(type.label)}</option>`).join('');
+                    taskTypeFilter.value = [...defaultTypes, ...(d.types || [])].some(type => String(type.id) === selectedTypeId) ? selectedTypeId : 'all';
+                }
+                
+                // Agua
+                const dayWater = window.appDB.normalizeWaterMap(d.water[curKey]);
+
+                const waterMembers = d.members.filter(m => Number(m.waterGoal || 0) > 0);
+                const waterMembersSummary = waterMembers.map(m => {
+                    const memberWater = Number(dayWater[m.id] || 0);
+                    const goal = Number(m.waterGoal || 0);
+                    const pct = goal ? Math.min(100, Math.round((memberWater / goal) * 100)) : 0;
+                    const status = goal ? (memberWater >= goal ? 'Na meta' : `${Math.max(0, goal - memberWater)}ml para a meta`) : 'Sem meta';
+                    const statusClass = goal ? (memberWater >= goal ? 'text-success' : 'text-blue-300') : 'text-gray-400';
+                    return `<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 rounded-xl border border-blueGrey/30 bg-bgMain">
+                        <div class="flex items-center gap-3">
+                            <img src="${m.photo || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (m.avatar || m.name || 'user') + '&backgroundColor=15171A'}" class="w-10 h-10 rounded-full object-cover border border-blueGrey" />
+                            <div>
+                                <p class="font-bold">${m.name}</p>
+                                <p class="text-xs text-gray-400">${goal ? `${memberWater} / ${goal} ml` : `${memberWater} ml`}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-28 h-2 bg-bgCard rounded-full overflow-hidden border border-blueGrey/30"><div class="h-full bg-blue-500" style="width:${goal ? Math.min(100, pct) : 0}%"></div></div>
+                            <div class="text-right min-w-[110px]">
+                                <p class="text-[10px] ${statusClass}">${status}</p>
+                                <div class="mt-1 flex flex-wrap items-center gap-1"><label for="water-amount-${m.id}" class="sr-only">Quantidade a adicionar em ml</label><input id="water-amount-${m.id}" type="number" min="50" step="50" value="200" class="w-20 bg-bgMain border border-blueGrey/50 rounded px-2 py-1 text-[10px] text-white" aria-label="Quantidade a adicionar em ml"><span class="text-[10px] text-gray-400">ml</span><button onclick="window.appDB.addWater(document.getElementById('water-amount-${m.id}').value, ${m.id})" class="px-2 py-1 bg-blueGrey/20 text-blue-300 border border-blueGrey/50 rounded text-[10px] font-bold">Adicionar</button></div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+                document.getElementById('water-members-summary').innerHTML = waterMembers.length ? waterMembersSummary : '<p class="text-gray-500 text-sm">Nenhum integrante optou por uma meta de hidratação.</p>';
+                
+                // Calendario
+                let y = window.appUI.curDate.getFullYear(), m = window.appUI.curDate.getMonth();
+                document.getElementById('cal-month-name').innerText = window.appUI.curDate.toLocaleString('pt-BR',{month:'long',year:'numeric'});
+                let html='', f = new Date(y,m,1).getDay(), max = new Date(y,m+1,0).getDate();
+                for(let i=0;i<f;i++) html+=`<div></div>`;
+                for(let i=1;i<=max;i++){
+                    let k = utils.getDateKey(new Date(y,m,i)); let sel = k===curKey;
+                    html+=`<div onclick="window.appUI.setDate('${k}')" class="p-2 rounded-lg text-sm text-center cursor-pointer ${sel?'bg-mainRed text-white font-bold':'text-gray-400 hover:bg-bgMain border border-blueGrey/20'}">${i}</div>`;
+                }
+                document.getElementById('month-grid').innerHTML = html;
+                document.getElementById('dash-date-display').innerText = window.appUI.curDate.toLocaleDateString('pt-BR');
+                
+                // Tarefas
+                let dTasks = d.tasks.filter(t=>t.mode === 'single' ? t.date === curKey : Array.isArray(t.days) && t.days.includes(window.appUI.curDate.getDay()));
+                let dc=0, fc=0, pc=0;
+                document.getElementById('daily-tasks-container').innerHTML = dTasks.length===0?'<p class="text-gray-500 italic">Livre hoje!</p>':dTasks.map(t=>{
+                    let mem = d.members.find(x=>x.id===t.memberId); let st = (t.status&&t.status[curKey])?t.status[curKey]:'pending';
+                    let typ = [...defaultTypes, ...(d.types||[])].find(x=>x.id===t.type)||defaultTypes[0];
+                    if(st==='done' || st==='approved')dc++; else if(st==='failed')fc++; else pc++;
+                    let b = st==='done'?'border-success bg-success/10':st==='failed'?'border-mainRed bg-mainRed/10':'border-blueGrey/50 bg-bgCard';
+                    return `<div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3 p-4 mb-2 rounded-xl border-l-4 ${b}"><div class="flex items-center gap-3">${window.appUI.getTaskBadgeHtml(t)}<img src="${mem?.photo || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (mem?.avatar || mem?.name || 'user') + '&backgroundColor=15171A'}" class="w-10 h-10 rounded-full border border-blueGrey object-cover"><div><p class="font-bold">${t.title} <span class="text-[9px] px-1 rounded uppercase" style="color:${typ.color}; border: 1px solid ${typ.color}">${typ.label}</span>${t.isBonusTask ? `<span class="ml-1 text-[10px] text-yellow-300">+R$ ${Number(t.bonusValue).toFixed(2).replace('.', ',')}</span>` : ''}</p><p class="text-xs text-gray-400">Responsável: ${mem?.name || 'Sem responsável'}${t.time ? ` • ${t.time}` : ''} • 1 ponto ao concluir</p></div></div><div class="flex gap-2"><button onclick="window.appDB.updateTask(${t.id},'${curKey}','done')" class="px-3 py-2 rounded bg-bgMain text-success border border-success hover:bg-success hover:text-white text-xs font-bold"><i class="fas fa-check mr-1"></i>Concluída</button><button onclick="window.appDB.updateTask(${t.id},'${curKey}','failed')" class="px-3 py-2 rounded bg-bgMain text-mainRed border border-mainRed hover:bg-mainRed hover:text-white text-xs font-bold"><i class="fas fa-times mr-1"></i>Não concluída</button><button onclick="window.appUI.openTaskModal(${t.id})" class="px-2 py-2 rounded bg-bgMain text-blueGrey border border-blueGrey/50" title="Editar tarefa"><i class="fas fa-pen"></i></button><button onclick="window.appDB.deleteTask(${t.id})" class="px-2 py-2 rounded bg-bgMain text-mainRed border border-mainRed" title="Excluir tarefa"><i class="fas fa-trash"></i></button></div></div>`;
+                }).join('');
+                document.getElementById('quick-stats').innerHTML = `<div class="bg-bgCard p-3 rounded border-b-2 border-white text-center"><p class="text-[10px] text-gray-400">TOTAL</p><p class="font-bold">${dc+fc+pc}</p></div><div class="bg-bgCard p-3 rounded border-b-2 border-success text-center"><p class="text-[10px] text-success">FEITAS</p><p class="font-bold">${dc}</p></div><div class="bg-bgCard p-3 rounded border-b-2 border-blueGrey text-center"><p class="text-[10px] text-blueGrey">PENDENTES</p><p class="font-bold">${pc}</p></div><div class="bg-bgCard p-3 rounded border-b-2 border-mainRed text-center"><p class="text-[10px] text-mainRed">FALHAS</p><p class="font-bold">${fc}</p></div>`;
+                window.appUI.renderTaskExplorer();
+                
+                const pendingApprovals = window.familyServices.approval.pending(d);
+                document.getElementById('approval-count').innerText = pendingApprovals.length ? `${pendingApprovals.length} aguardando` : 'Tudo em dia';
+                document.getElementById('approval-list').innerHTML = pendingApprovals.length ? pendingApprovals.map(approval => {
+                    const task = d.tasks.find(item => String(item.id) === String(approval.taskId));
+                    const member = d.members.find(item => String(item.id) === String(approval.childId));
+                    if (!task) return '';
+                    return `<div class="bg-bgMain border border-yellow-300/30 rounded-xl p-3">
+                        <div class="flex justify-between gap-2"><div><p class="font-bold">${task.title}</p><p class="text-xs text-gray-400">${member?.name || 'Integrante'} • ${new Date(`${approval.date}T12:00:00`).toLocaleDateString('pt-BR')} • ${window.familyServices.gamification.pointsFor(task)} pontos</p></div><span class="text-[10px] text-yellow-300">Aguardando aprovação</span></div>
+                        ${approval.proof?.url ? `<img src="${approval.proof.url}" alt="Comprovante de ${task.title}" class="mt-3 w-full max-h-40 object-cover rounded-lg border border-blueGrey/40">` : ''}
+                        ${approval.feedback ? `<p class="text-xs text-gray-300 mt-2">Comentário: ${approval.feedback}</p>` : ''}
+                        <div class="flex justify-end gap-2 mt-3"><button onclick="window.appDB.reviewApproval('${approval.id}','rejected')" class="px-3 py-1.5 text-xs text-mainRed border border-mainRed rounded-lg">Pedir revisão</button><button onclick="window.appDB.reviewApproval('${approval.id}','approved')" class="px-3 py-1.5 text-xs text-white bg-success rounded-lg">Aprovar</button></div>
+                    </div>`;
+                }).join('') : '<p class="text-sm text-gray-500">Nenhum comprovante aguardando análise.</p>';
+
+                const trackedMembers = d.members;
+                document.getElementById('wallets-list').innerHTML = trackedMembers.length ? trackedMembers.map(member => {
+                    const wallet = window.familyServices.wallet.ensure(member.id, d);
+                    const rank = window.familyServices.gamification.memberRank(member.id, d);
+                    const goal = (d.goals || []).find(item => String(item.childId) === String(member.id) && !item.completedAt);
+                    const popular = window.familyServices.gamification.popularTask(member.id, d.tasks);
+                    const streak = window.familyServices.gamification.calculateStreak(member.id, d.tasks, window.appUI.curDate);
+                    const goalProgress = goal ? Math.min(100, Math.round(Number(goal.accumulatedAmount || wallet.buckets.save || 0) / Number(goal.targetAmount) * 100)) : 0;
+                    return `<div class="bg-bgMain border border-blueGrey/30 rounded-xl p-3"><div class="flex justify-between items-start gap-2"><div><p class="font-bold">${member.name}</p><p class="text-xs text-yellow-300">${wallet.points} pontos • R$ ${Number(wallet.money).toFixed(2).replace('.', ',')}</p><p class="text-[10px] text-gray-400">Nível ${rank.current.title} • ${rank.next ? `${rank.pointsToNext} pts para ${rank.next.title}` : 'nível máximo'}</p></div><button onclick="window.appUI.configureWallet('${member.id}')" class="text-xs text-gray-400" title="Configurar carteira"><i class="fas fa-sliders"></i></button></div><div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 mt-3"><span>Gastar R$ ${wallet.buckets.spend.toFixed(2)}</span><span>Guardar R$ ${wallet.buckets.save.toFixed(2)}</span><span>Ajudar R$ ${wallet.buckets.help.toFixed(2)}</span></div><p class="text-xs text-pink-300 mt-2"><i class="fas fa-fire"></i> Ofensiva: ${streak} dia(s)${popular ? ` • Popular: ${popular.title}` : ''}</p>${goal ? `<div class="mt-2"><div class="flex justify-between text-[10px] text-gray-400"><span>${goal.title}</span><span>${goalProgress}%</span></div><div class="h-2 bg-bgCard rounded-full overflow-hidden mt-1"><div class="h-full bg-pink-400" style="width:${goalProgress}%"></div></div></div>` : '<p class="text-[10px] text-gray-500 mt-2">Nenhuma meta ativa.</p>'}</div>`;
+                }).join('') : '<p class="text-sm text-gray-500">Cadastre integrantes para ativar as carteiras.</p>';
+
+                document.getElementById('rewards-list').innerHTML = (d.rewards || []).filter(reward => reward.active).length ? d.rewards.filter(reward => reward.active).map(reward => `<div class="bg-bgMain border border-blueGrey/30 rounded-xl p-3 flex justify-between items-center gap-3"><div><p class="font-bold">${reward.title}</p><p class="text-xs text-yellow-300">${reward.pointsCost} pontos</p></div><button onclick="window.appUI.purchaseReward('${reward.id}')" class="px-3 py-1.5 bg-yellow-300 text-black rounded-lg text-xs font-bold">Resgatar</button></div>`).join('') : '<p class="text-sm text-gray-500">Nenhum prêmio cadastrado.</p>';
+                
+                // Membros
+                document.getElementById('members-list').innerHTML = d.members.map(m => {
+                    const selected = window.appUI.selectedMemberId === m.id ? 'border-mainRed bg-mainRed/5' : 'border-blueGrey/30';
+                    return `<div class="bg-bgCard p-4 rounded-xl border ${selected} flex justify-between items-center cursor-pointer" onclick="window.appUI.showMemberTasks(${m.id})"><div class="flex items-center gap-3"><button onclick="event.stopPropagation(); window.appUI.showMemberTasks(${m.id})" class="rounded-full focus:outline-none focus:ring-2 focus:ring-mainRed" title="Ver perfil de ${m.name}"><img src="${m.photo || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (m.avatar || m.name || 'user') + '&backgroundColor=15171A'}" class="w-12 h-12 rounded-full border border-blueGrey object-cover" alt="Foto de ${m.name}"></button><div><p class="font-bold">${m.name}</p><p class="text-[10px] px-2 py-0.5 rounded-full bg-bgMain border border-blueGrey mt-1 inline-block">${utils.getAgeCat(m.age)}</p></div></div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appUI.openTaskModal()" class="px-3 py-2 bg-bgMain text-success rounded-lg"><i class="fas fa-plus"></i></button><button onclick="event.stopPropagation(); window.appUI.openMemberModal(${m.id})" class="px-3 py-2 bg-bgMain text-blueGrey rounded-lg"><i class="fas fa-pen"></i></button><button onclick="event.stopPropagation(); window.appDB.deleteMember(${m.id})" class="px-3 py-2 bg-bgMain text-mainRed rounded-lg"><i class="fas fa-trash"></i></button></div></div>`;
+                }).join('');
+                if (window.appUI.selectedMemberId) {
+                    window.appUI.showMemberTasks(window.appUI.selectedMemberId);
+                } else if (d.members.length) {
+                    window.appUI.showMemberTasks(d.members[0].id);
+                } else {
+                    document.getElementById('member-details').innerHTML = '<p class="text-gray-500">Nenhum integrante cadastrado.</p>';
+                }
+                
+                // Configs Tipos
+                document.getElementById('task-types-list').innerHTML = [...defaultTypes, ...(d.types||[])].map(t=>`<div class="bg-bgMain p-3 rounded-xl border border-blueGrey/30 flex justify-between items-center"><p class="text-sm font-bold" style="color:${t.color}">${t.label}</p>${defaultTypes.some(defaultType => defaultType.id === t.id) ? '' : `<button onclick="window.appDB.deleteType('${t.id}')" class="text-mainRed" title="Excluir categoria"><i class="fas fa-trash"></i></button>`}</div>`).join('');
+                document.getElementById('bonus-task-options-list').innerHTML = d.bonusTaskOptions.length ? d.bonusTaskOptions.map(option => `<div class="bg-bgMain p-3 rounded-xl border border-blueGrey/30 grid grid-cols-1 md:grid-cols-[1fr_150px_auto_auto] gap-2 items-end"><label class="text-xs text-gray-400">Tarefa<input id="bonus-title-${option.id}" type="text" maxlength="120" value="${String(option.title).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" class="mt-1 w-full bg-bgCard border border-blueGrey/50 rounded-lg p-2 text-white"></label><label class="text-xs text-gray-400">Bônus (R$)<input id="bonus-value-${option.id}" type="number" min="0.01" step="0.01" value="${Number(option.value)}" class="mt-1 w-full bg-bgCard border border-blueGrey/50 rounded-lg p-2 text-white"></label><button type="button" onclick="window.appDB.updateBonusTaskOption('${option.id}')" class="px-3 py-2 bg-blueGrey text-white rounded-lg text-xs font-bold"><i class="fas fa-save mr-1"></i> Salvar</button><button type="button" onclick="window.appDB.deleteBonusTaskOption('${option.id}')" class="px-3 py-2 text-mainRed border border-mainRed rounded-lg text-xs font-bold"><i class="fas fa-trash"></i></button></div>`).join('') : '<p class="text-sm text-gray-500">Nenhuma tarefa bônus cadastrada.</p>';
+                
+                window.appUI.updateChart();
+                window.appUI.renderHistory();
+                window.appUI.renderFinanceSummary();
+                window.appUI.renderChildView();
+                window.appUI.syncLevelUps();
+            }
+        };
+        window.onload = () => {
+            window.appUI.initTheme();
+            window.appDB.init();
+        };
+    </script>
+</body>
+</html>

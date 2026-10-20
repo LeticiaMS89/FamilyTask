@@ -1,0 +1,133 @@
+:root {
+    --bg-main: #09090B;
+    --bg-sec: #15111B;
+    --red-primary: #E11D48;
+    --red-dark: #9F1239;
+    --blue-gray: #6D28D9;
+    --text-main: #FFFFFF;
+    --text-sec: #E0E0E0;
+    --green-success: #A855F7;
+    
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Tipografia e Cores de Status */
+.text-green { color: var(--green-success); }
+.text-blue-gray { color: var(--blue-gray); }
+.text-red { color: var(--red-primary); }
+
+/* Layout Base */
+.sidebar {
+    width: 250px;
+    background-color: var(--bg-sec);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+}
+
+/* Cards */
+.card, .kpi-card {
+    background-color: var(--bg-sec);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Barra de Progresso de Água */
+.progress-bar-container {
+    width: 100%;
+    height: 15px;
+    background-color: var(--blue-gray);
+    border-radius: 10px;
+    margin: 15px 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--text-main);
+    width: 0%;
+    transition: width 0.4s ease;
+}
+.progress-bar.goal-met {
+    background-color: var(--green-success);
+}
+
+/* Botões */
+button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+.btn-primary {
+    background-color: var(--red-primary);
+    color: white;
+}
+.btn-primary:hover { background-color: var(--red-dark); }
+.btn-secondary {
+    background-color: var(--blue-gray);
+    color: white;
+}
+
+/* Responsividade Mobile */
+.bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar { display: none; }
+    .bottom-nav {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background-color: var(--bg-sec);
+        padding: 15px 0;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+    }
+    .content { padding: 15px; margin-bottom: 60px; }
+    .btn-fab {
+        background-color: var(--red-primary);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        font-size: 24px;
+        transform: translateY(-20px);
+    }
+}

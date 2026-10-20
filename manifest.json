@@ -1,0 +1,16 @@
+{
+  "name": "FamilyTask Manager",
+  "short_name": "FamilyTask",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#09090B",
+  "theme_color": "#8B5CF6",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
